@@ -46,6 +46,12 @@ const SITE_CONTENT_SELECTORS = {
   // a user-inventory/badge display, ~2800 chars) and a recommend-button block
   // alongside the actual post.
   "www.inven.co.kr": ".articleTitle h1, #powerbbsContent",
+  // Uses the Froala editor; the whole post (with the real body wrapped in
+  // .article-body) also sits inside <article> alongside a huge
+  // .included-article-list (board post table) and a right sidebar — but
+  // .article-content alone is exactly the post content, nothing else, so no
+  // separate cleanup selectors are even needed here.
+  "arca.live": ".fr-view.article-content",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -322,10 +328,14 @@ function jcpBlobToDataUrl(blob) {
 // misses any image that hasn't been scrolled to yet — src is left pointing at
 // a small placeholder/thumbnail (e.g. Naver Blog's SmartEditor ONE, which uses
 // data-lazy-src specifically and leaves a tiny list-thumbnail-sized URL in src
-// for any image not yet scrolled into view).
+// for any image not yet scrolled into view). data-originalurl is a different
+// case — src isn't broken there, just a smaller/compressed variant (arca.live
+// does this); preferring it gets a better-quality clip, not a fix for a
+// missing image.
 function jcpRealImgUrl(img) {
   return (
     img.getAttribute("data-original") ||
+    img.getAttribute("data-originalurl") ||
     img.getAttribute("data-lazy-src") ||
     img.getAttribute("data-src") ||
     img.getAttribute("src") ||
