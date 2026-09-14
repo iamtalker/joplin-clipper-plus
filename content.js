@@ -29,6 +29,28 @@ const SITE_CONTENT_SELECTORS = {
   "aagag.com": "h1.title, #vContent",
 };
 
+// Naver Blog (and similar sites) don't put the real post in the top-level
+// page at all — the whole content area is a same-origin <iframe> that loads
+// a *different* URL (blog.naver.com/PostView.naver?...). Our content script
+// only ever sees the top-level document, so Readability found nothing to
+// parse there. Since the iframe is same-origin, its contentDocument is
+// directly readable — jcpGetEffectiveDoc() swaps in that inner document (and
+// its own URL, for resolving relative links/images) wherever a matching
+// hostname is configured here.
+const SITE_IFRAME_SELECTORS = {
+  "blog.naver.com": "#mainFrame",
+};
+
+function jcpGetEffectiveDoc() {
+  const sel = SITE_IFRAME_SELECTORS[location.hostname];
+  if (!sel) return { doc: document, baseUrl: location.href };
+  const iframe = document.querySelector(sel);
+  if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+    return { doc: iframe.contentDocument, baseUrl: iframe.contentDocument.location.href };
+  }
+  return { doc: document, baseUrl: location.href };
+}
+
 // Extra elements to strip out of a SITE_CONTENT_SELECTORS match — post-footer
 // widgets (recommend buttons, attachment file lists, related-gallery boxes,
 // ad slots) that live inside the content container but aren't part of the post.
@@ -416,14 +438,15 @@ function jcpPageMeta() {
 }
 
 async function jcpClipArticle() {
+  const { doc: effectiveDoc, baseUrl } = jcpGetEffectiveDoc();
   const overrideSelector = SITE_CONTENT_SELECTORS[location.hostname];
-  const overrideEls = overrideSelector ? Array.from(document.querySelectorAll(overrideSelector)) : [];
+  const overrideEls = overrideSelector ? Array.from(effectiveDoc.querySelectorAll(overrideSelector)) : [];
 
   let article;
   if (overrideEls.length) {
     const container = document.createElement("div");
     overrideEls.forEach((el) => container.appendChild(el.cloneNode(true)));
-    jcpAbsolutize(container, location.href);
+    jcpAbsolutize(container, baseUrl);
     jcpStripNonContentTags(container);
     const cleanupSelectors = SITE_CLEANUP_SELECTORS[location.hostname];
     if (cleanupSelectors && cleanupSelectors.length) {
@@ -432,8 +455,8 @@ async function jcpClipArticle() {
     jcpApplyTitleLabels(container, SITE_LABEL_FROM_TITLE_SELECTORS[location.hostname]);
     article = { title: document.title, content: container.innerHTML, excerpt: "", byline: "" };
   } else {
-    const docClone = document.cloneNode(true);
-    jcpAbsolutize(docClone, location.href);
+    const docClone = effectiveDoc.cloneNode(true);
+    jcpAbsolutize(docClone, baseUrl);
     jcpStripBoardChrome(docClone);
     article = new Readability(docClone).parse();
     if (!article) return { error: "Readability could not parse this page." };
@@ -444,7 +467,7 @@ async function jcpClipArticle() {
   jcpStripNonContentTags(wrapper);
   jcpStripTrailingWireFooter(wrapper);
   const videoIds = jcpExtractVideoPlaceholders(wrapper);
-  await jcpInlineImages(wrapper, location.href);
+  await jcpInlineImages(wrapper, baseUrl);
   const td = jcpMakeTurndown();
   const markdown = jcpApplyVideoPlaceholders(td.turndown(wrapper.innerHTML), videoIds);
   return {
