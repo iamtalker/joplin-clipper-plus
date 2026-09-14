@@ -314,9 +314,18 @@ function jcpBlobToDataUrl(blob) {
 // Lazy-loading gallery scripts (DCinside included, once a post has more than a
 // couple of images) leave the real image URL in data-original/data-src and only
 // swap it into src once the image scrolls near the viewport. Reading src alone
-// misses any image that hasn't been scrolled to yet.
+// misses any image that hasn't been scrolled to yet — src is left pointing at
+// a small placeholder/thumbnail (e.g. Naver Blog's SmartEditor ONE, which uses
+// data-lazy-src specifically and leaves a tiny list-thumbnail-sized URL in src
+// for any image not yet scrolled into view).
 function jcpRealImgUrl(img) {
-  return img.getAttribute("data-original") || img.getAttribute("data-src") || img.getAttribute("src") || "";
+  return (
+    img.getAttribute("data-original") ||
+    img.getAttribute("data-lazy-src") ||
+    img.getAttribute("data-src") ||
+    img.getAttribute("src") ||
+    ""
+  );
 }
 
 // Wait for the live page's own lazy-load script to swap the real image into
@@ -406,7 +415,9 @@ function jcpFindLiveImg(absSrc, baseUrl) {
 async function jcpInlineImages(root, baseUrl) {
   const MAX_BYTES = 6 * 1024 * 1024;
   const MAX_TAB_CAPTURES = 20; // captureVisibleTab is rate-limited; cap the fallback
-  const imgs = Array.from(root.querySelectorAll("img[src], img[data-original], img[data-src]"));
+  const imgs = Array.from(
+    root.querySelectorAll("img[src], img[data-original], img[data-lazy-src], img[data-src]")
+  );
   let tabCaptures = 0;
 
   for (const img of imgs) {
