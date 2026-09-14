@@ -38,6 +38,10 @@ const SITE_CONTENT_SELECTORS = {
   // Readability was pulling in comments, ads, prev/next links, etc. The
   // actual post body (text + attached photos) is this one small div.
   "www.slrclub.com": "#userct",
+  // Next.js-rendered site with a massive page shell (500k+ chars body) —
+  // Readability grabbed comments, an "other posts" list, and category
+  // filters. The real post is just the title heading plus this content div.
+  "etoland.co.kr": "article h1, .view-content",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -76,6 +80,9 @@ const SITE_CLEANUP_SELECTORS = {
   // Custom video-player chrome (speed/volume controls, progress bar) that
   // sits as sibling divs next to a self-hosted <video> — see jcpCleanVideoTags.
   "aagag.com": [".s_opt", ".v_progress"],
+  // Custom video-player control bar (timestamp, speed selector) rendered as
+  // a sibling of the <video> element itself.
+  "etoland.co.kr": ['[class*="peer/controls"]'],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
@@ -270,13 +277,15 @@ function jcpApplyVideoPlaceholders(markdown, ids) {
 // site's custom player chrome as sibling elements) original with one clean
 // <video controls src="..."> pointing at the original URL — Joplin's
 // renderer supports <video> natively — which Turndown is told to keep as
-// raw HTML via td.keep(["video"]) in jcpMakeTurndown().
+// raw HTML via td.keep(["video"]) in jcpMakeTurndown(). Some sites lazy-load
+// video the same way they lazy-load images (real URL in data-src, src left
+// empty until scrolled into view), so that's checked as a fallback too.
 function jcpCleanVideoTags(root, baseUrl) {
   root.querySelectorAll("video").forEach((video) => {
-    let src = video.getAttribute("src");
+    let src = video.getAttribute("src") || video.getAttribute("data-src");
     if (!src) {
       const source = video.querySelector("source[src]");
-      if (source) src = source.getAttribute("src");
+      if (source) src = source.getAttribute("src") || source.getAttribute("data-src");
     }
     if (!src) return;
     let abs;
