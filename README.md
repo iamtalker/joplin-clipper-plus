@@ -47,6 +47,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - 네이버 블로그처럼 실제 본문이 동일 출처 iframe 안에서 로드되는 사이트는 `SITE_IFRAME_SELECTORS`에 `호스트명: "iframe CSS 셀렉터"`를 추가하면 그 iframe 문서를 대신 분석합니다(Article 모드만 적용, Full Page/Bookmark 모드는 아직 미적용). Full Page 모드는 iframe 내용을 flatten하지 못해 이런 사이트에서는 여전히 빈 스냅샷이 나올 수 있습니다.
 
 ## 변경 이력
+- **0.20.1** — **중요 버그 수정**: 같은 페이지를 새로고침 없이 두 번째 클리핑하면 "Clipping..." 상태에서 영영 멈춰버리던 문제. `content.js`가 클릭할 때마다 탭에 반복 주입되는데, 크롬의 "격리된 월드(isolated world)"가 탭 안에서 계속 유지되다 보니 두 번째 주입부터 `const SITE_CONTENT_SELECTORS` 같은 최상위 선언이 "이미 선언됨" 에러로 스크립트 전체를 조용히 멈춰버렸던 것. `content.js` 전체를 즉시실행함수(IIFE)로 감싸서 매 주입마다 독립된 스코프를 갖도록 수정 — Node로 "같은 스크립트 두 번 주입" 상황을 직접 재현해서 수정 전/후 검증함. 추가로 이미지 다운로드에 12초, 클리핑 전체에 45초 제한 시간을 걸어서, 앞으로 비슷하게 알 수 없는 이유로 멈추는 경우에도 최소한 오류 메시지는 뜨도록 안전장치 추가.
 - **0.20.0** — 아카라이브(arca.live) 클리핑 지원 추가. 게시글 목록 표, 사이드바 등이 통째로 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `.fr-view.article-content` 등록해서 해결(⚠️ 이 사이트는 브라우저 안전 정책상 직접 접속이 막혀서 사용자가 보내준 페이지 소스로 확인함, 실제 클리핑 동작 확인 필요). 아카라이브 이미지의 `data-originalurl` 속성(고화질 원본)도 인식하도록 `jcpRealImgUrl`에 추가 — 다른 사이트에도 범용 적용됨.
 - **0.19.0** — 인벤(inven.co.kr) 클리핑 지원 추가. 인벤 고유 기능인 "인벤토리" 위젯(사용자 뱃지/아이템 표시)이랑 추천 버튼 블록이 같이 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `.articleTitle h1, #powerbbsContent` 등록해서 해결. 이미지 CORS도 막혀있어 `SCREENSHOT_FALLBACK_HOSTS`에도 추가.
 - **0.18.1** — 네이버 블로그에서 사진이 여러 장일 때 일부만 원본 크기로 잡히고 나머지는 목록 썸네일 수준으로 작게 잡히던 문제 수정. 스마트에디터 ONE은 화면에 아직 안 보인 이미지를 `data-lazy-src` 속성에 원본 주소를 숨겨두고 `src`엔 작은 미리보기만 남겨두는데, 이 속성을 확인 안 하고 있었음(범용 개선, `jcpRealImgUrl`/`jcpInlineImages`에 `data-lazy-src` 지원 추가). ⚠️ 역시 라이브 테스트는 못 함, 확인 필요.

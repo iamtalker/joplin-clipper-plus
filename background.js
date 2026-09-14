@@ -84,6 +84,18 @@ async function captureImageRect(tabId, rect) {
   return `data:image/png;base64,${base64}`;
 }
 
+// Safety net for the whole clip operation: content.js has its own per-image
+// fetch timeout now, but this guards against any other stuck step (script
+// injection, a hung message round-trip, something not yet anticipated) so
+// the popup always gets a response instead of sitting on "Clipping…" forever.
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function runClipOnTab(tabId, mode) {
   await chrome.scripting.executeScript({ target: { tabId }, files: LIB_FILES });
   const [{ result }] = await chrome.scripting.executeScript({
@@ -132,7 +144,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, folders: await listFolders() });
       } else if (msg.type === "clip") {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const clip = await runClipOnTab(tab.id, msg.mode);
+        const clip = await withTimeout(
+          runClipOnTab(tab.id, msg.mode),
+          45000,
+          "클리핑이 45초 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
+        );
         if (clip.error) {
           sendResponse({ ok: false, error: clip.error });
           return;

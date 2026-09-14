@@ -1,5 +1,17 @@
 // Injected into the page on demand. Runs Readability + Turndown and returns
 // structured clip data to the caller via the return value of executeScript.
+//
+// Wrapped in an IIFE because this file (along with the library files) gets
+// re-injected into the same tab on every clip attempt without a page reload
+// in between. chrome.scripting.executeScript's "isolated world" persists
+// across separate injections, so top-level const/let declarations would
+// throw "Identifier has already been declared" on the second clip — an
+// uncaught SyntaxError that silently breaks the whole script, which is what
+// made the popup hang on "Clipping…" forever with no error shown. Wrapping
+// everything in a function scope means each injection gets its own fresh
+// scope; only window.__jcpRunClip crosses that boundary, and reassigning it
+// on each injection is harmless.
+(function () {
 
 // Some sites bury the real post inside a page where a *different* block (a
 // sidebar, or a huge "other posts" list) has more raw text than the actual
@@ -322,6 +334,17 @@ function jcpBlobToDataUrl(blob) {
   });
 }
 
+// Plain fetch() has no timeout — if an image host just never responds (slow
+// server, silently-dropped connection, a bot-check that hangs instead of
+// failing), this call would otherwise wait indefinitely, and since
+// jcpInlineImages awaits each image in sequence, that one stuck image freezes
+// the entire clip: the popup just sits on "Clipping…" forever with no error.
+function jcpFetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 // Lazy-loading gallery scripts (DCinside included, once a post has more than a
 // couple of images) leave the real image URL in data-original/data-src and only
 // swap it into src once the image scrolls near the viewport. Reading src alone
@@ -454,7 +477,7 @@ async function jcpInlineImages(root, baseUrl) {
     let dataUrl = null;
     if (!isMixedContent) {
       try {
-        const res = await fetch(abs, { credentials: "include" });
+        const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 12000);
         if (res.ok) {
           const blob = await res.blob();
           if (blob.size > 0 && blob.size <= MAX_BYTES) {
@@ -626,3 +649,5 @@ async function jcpRunClip(mode) {
 // as the injected function's return expression via a second exec call,
 // but to keep it to a single injection we expose it on window.
 window.__jcpRunClip = jcpRunClip;
+
+})();
