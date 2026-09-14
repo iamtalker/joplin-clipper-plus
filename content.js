@@ -19,6 +19,10 @@ const SITE_CONTENT_SELECTORS = {
   // recommend/view/comment counts) and the "추천한 분들" list + legend footer —
   // title and body live in their own separate siblings anyway.
   "www.todayhumor.co.kr": ".viewSubjectDiv, .viewContent",
+  // Gnuboard-based site: Readability was grabbing a big ad/category-link
+  // sidebar plus the usual prev/next/list nav instead of the actual post
+  // (a single image), so point straight at the real content div.
+  "qquing.net": "#bo_v_con",
 };
 
 // Extra elements to strip out of a SITE_CONTENT_SELECTORS match — post-footer
