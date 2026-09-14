@@ -334,6 +334,43 @@ function jcpBlobToDataUrl(blob) {
   });
 }
 
+// High-resolution photos (some sites serve originals well over 2000px on the
+// long side) make for slow, heavy clips once base64-encoded — a full-res
+// image isn't needed to read a note later. Downscale anything bigger than
+// MAX_DIM and re-encode as JPEG, which is usually a large size win for
+// photographic content. Runs on a blob: URL of bytes we already fetched
+// ourselves, so this never hits canvas cross-origin tainting.
+function jcpDownscaleImage(blob) {
+  const MAX_DIM = 1600;
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const longest = Math.max(w, h);
+      if (!longest || longest <= MAX_DIM) {
+        URL.revokeObjectURL(url);
+        resolve(blob);
+        return;
+      }
+      const scale = MAX_DIM / longest;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((outBlob) => resolve(outBlob || blob), "image/jpeg", 0.85);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+    img.src = url;
+  });
+}
+
 // Plain fetch() has no timeout — if an image host just never responds (slow
 // server, silently-dropped connection, a bot-check that hangs instead of
 // failing), this call would otherwise wait indefinitely, and since
@@ -484,9 +521,12 @@ async function jcpInlineImages(root, baseUrl) {
         try {
           const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 12000);
           if (res.ok) {
-            const blob = await res.blob();
-            if (blob.size > 0 && blob.size <= MAX_BYTES) {
-              dataUrl = await jcpBlobToDataUrl(blob);
+            let blob = await res.blob();
+            if (blob.size > 0) {
+              blob = await jcpDownscaleImage(blob);
+              if (blob.size <= MAX_BYTES) {
+                dataUrl = await jcpBlobToDataUrl(blob);
+              }
             }
           }
         } catch (e) {
