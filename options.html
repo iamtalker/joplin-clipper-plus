@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Joplin Clipper Plus - Settings</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; width: 420px; padding: 16px; color: #222; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; margin: 12px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
+  button { margin-top: 14px; padding: 7px 14px; font-size: 13px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
+  button.secondary { background: #eee; color: #333; margin-left: 8px; }
+  #status { margin-top: 10px; font-size: 12px; }
+  .ok { color: #1a7f37; }
+  .err { color: #c62828; }
+  .hint { font-size: 11px; color: #666; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <h1>Joplin Clipper Plus — Settings</h1>
+
+  <label for="port">Joplin Web Clipper port</label>
+  <input id="port" placeholder="41184" />
+  <div class="hint">Joplin desktop → Tools → Options → Web Clipper → make sure the service is enabled.</div>
+
+  <label for="token">Authorization token</label>
+  <input id="token" placeholder="paste token from Joplin's Web Clipper options page" />
+
+  <button id="save">Save</button>
+  <button id="test" class="secondary">Test connection</button>
+  <div id="status"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>
