@@ -35,6 +35,9 @@ const SITE_CONTENT_SELECTORS = {
   // actual post (title metadata table + one attached photo). The site's own
   // template comment literally reads "게시물 이미지, 동영상 들어갈 테이블 시작".
   "web.humoruniv.com": "#cnts",
+  // Readability was pulling in comments, ads, prev/next links, etc. The
+  // actual post body (text + attached photos) is this one small div.
+  "www.slrclub.com": "#userct",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -97,6 +100,7 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
   "www.todayhumor.co.kr",
   "aagag.com",
   "web.humoruniv.com",
+  "www.slrclub.com",
 ]);
 
 // script/style/template content has no Markdown representation, but Turndown
