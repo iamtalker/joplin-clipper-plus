@@ -46,6 +46,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - 네이버 블로그처럼 실제 본문이 동일 출처 iframe 안에서 로드되는 사이트는 `SITE_IFRAME_SELECTORS`에 `호스트명: "iframe CSS 셀렉터"`를 추가하면 그 iframe 문서를 대신 분석합니다(Article 모드만 적용, Full Page/Bookmark 모드는 아직 미적용). Full Page 모드는 iframe 내용을 flatten하지 못해 이런 사이트에서는 여전히 빈 스냅샷이 나올 수 있습니다.
 
 ## 변경 이력
+- **0.14.1** — 네이버 블로그 본문 위에 "공지 목록" 위젯이 같이 딸려오던 문제 수정. `SITE_CONTENT_SELECTORS`에 `.se-main-container`(스마트에디터 ONE의 본문 고정 클래스) 등록. ⚠️ 이것도 라이브 테스트는 못 하고 일반적으로 알려진 구조로 구현함.
 - **0.14.0** — 네이버 블로그(blog.naver.com) Article 모드 클리핑이 "파서 실패"로 아예 안 되던 문제 수정. 네이버 블로그는 실제 글 내용이 최상위 페이지가 아니라 `#mainFrame`이라는 iframe 안에서 로드되는데, 클리퍼는 최상위 페이지만 보고 있어서 본문 자체를 못 찾았던 것. `SITE_IFRAME_SELECTORS`(신규)로 동일 출처 iframe을 감지해서 그 iframe의 문서를 대신 분석하도록 수정(`jcpGetEffectiveDoc`). ⚠️ 브라우저 안전 정책상 blog.naver.com에 직접 접속해 테스트하지 못했음 — 일반적으로 알려진 구조를 바탕으로 구현, 실제 동작 확인 필요.
 - **0.13.0** — 아아갓(aagag.com) 클리핑 지원 추가. 클립/신고/정치 카테고리 버튼, 데이터 절약량 위젯, 여러 사이트 댓글 통계, "다른 이슈" 목록 표까지 통째로 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `h1.title, #vContent`(제목+본문만) 등록. 이미지 CDN도 CORS가 막혀있어 `SCREENSHOT_FALLBACK_HOSTS`에도 추가.
 - **0.12.0** — 뀨잉넷(qquing.net) 클리핑 지원 추가. 실제 본문(웹코믹 이미지 1장)이 아니라 광고성 카테고리 링크 + 이전글/다음글/목록 네비게이션 + 댓글/관련자료까지 통째로 긁어오던 문제 — `SITE_CONTENT_SELECTORS`에 `#bo_v_con` 등록해서 해결.

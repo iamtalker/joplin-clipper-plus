@@ -27,6 +27,10 @@ const SITE_CONTENT_SELECTORS = {
   // a bandwidth-savings widget, comments, and the "other issues" list table —
   // instead of just the title + post image.
   "aagag.com": "h1.title, #vContent",
+  // Readability (running on the iframe doc via SITE_IFRAME_SELECTORS below)
+  // was pulling in a "공지 목록" (notices) widget along with the real post.
+  // Naver's SmartEditor ONE wraps just the actual post body in this class.
+  "blog.naver.com": ".se-main-container",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
