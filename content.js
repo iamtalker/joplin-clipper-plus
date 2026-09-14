@@ -31,6 +31,10 @@ const SITE_CONTENT_SELECTORS = {
   // was pulling in a "공지 목록" (notices) widget along with the real post.
   // Naver's SmartEditor ONE wraps just the actual post body in this class.
   "blog.naver.com": ".se-main-container",
+  // Readability was grabbing the ~55,000-char comment thread instead of the
+  // actual post (title metadata table + one attached photo). The site's own
+  // template comment literally reads "게시물 이미지, 동영상 들어갈 테이블 시작".
+  "web.humoruniv.com": "#cnts",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -92,6 +96,7 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
   "www.ppomppu.co.kr",
   "www.todayhumor.co.kr",
   "aagag.com",
+  "web.humoruniv.com",
 ]);
 
 // script/style/template content has no Markdown representation, but Turndown
