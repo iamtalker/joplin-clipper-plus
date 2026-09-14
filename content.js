@@ -456,43 +456,57 @@ async function jcpInlineImages(root, baseUrl) {
   const imgs = Array.from(
     root.querySelectorAll("img[src], img[data-original], img[data-lazy-src], img[data-src]")
   );
-  let tabCaptures = 0;
 
-  for (const img of imgs) {
-    const src = jcpRealImgUrl(img);
-    if (!src || src.startsWith("data:")) continue;
-    let abs;
-    try {
-      abs = new URL(src, baseUrl).href;
-    } catch (e) {
-      continue;
-    }
-
-    // An https page can never fetch() a plain-http URL — the browser blocks it
-    // as mixed content before our code even sees it, logging a console error
-    // in the process. Skip the doomed attempt outright and go straight to the
-    // tab-capture fallback instead of triggering that warning for nothing.
-    const isMixedContent = location.protocol === "https:" && abs.startsWith("http://");
-
-    let dataUrl = null;
-    if (!isMixedContent) {
+  // Phase 1: fetch() every image concurrently — this is the common, fast
+  // path (most sites need no fallback at all) and has no reason to be
+  // serialized; awaiting one full fetch+decode before even starting the next
+  // was needlessly slow on multi-image posts.
+  const results = await Promise.all(
+    imgs.map(async (img) => {
+      const src = jcpRealImgUrl(img);
+      if (!src || src.startsWith("data:")) return { img, abs: null, dataUrl: null };
+      let abs;
       try {
-        const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 12000);
-        if (res.ok) {
-          const blob = await res.blob();
-          if (blob.size > 0 && blob.size <= MAX_BYTES) {
-            dataUrl = await jcpBlobToDataUrl(blob);
-          }
-        }
+        abs = new URL(src, baseUrl).href;
       } catch (e) {
-        // Likely CORS-blocked; fall through to the tab-capture fallback below.
+        return { img, abs: null, dataUrl: null };
       }
-    }
 
-    if (!dataUrl && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
+      // An https page can never fetch() a plain-http URL — the browser blocks
+      // it as mixed content before our code even sees it, logging a console
+      // error in the process. Skip the doomed attempt outright and go
+      // straight to the tab-capture fallback instead of triggering that
+      // warning for nothing.
+      const isMixedContent = location.protocol === "https:" && abs.startsWith("http://");
+
+      let dataUrl = null;
+      if (!isMixedContent) {
+        try {
+          const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 12000);
+          if (res.ok) {
+            const blob = await res.blob();
+            if (blob.size > 0 && blob.size <= MAX_BYTES) {
+              dataUrl = await jcpBlobToDataUrl(blob);
+            }
+          }
+        } catch (e) {
+          // Likely CORS-blocked; fall through to the tab-capture fallback below.
+        }
+      }
+      return { img, abs, dataUrl };
+    })
+  );
+
+  // Phase 2: anything fetch() couldn't get falls back to tab-capture — this
+  // MUST stay sequential, since it scrolls the page and only one screenshot
+  // can be taken at a time.
+  let tabCaptures = 0;
+  for (const r of results) {
+    let dataUrl = r.dataUrl;
+    if (!dataUrl && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
       try {
-        const liveEl = jcpFindLiveImg(abs, baseUrl);
-        dataUrl = await jcpCaptureImageViaTab(liveEl, abs);
+        const liveEl = jcpFindLiveImg(r.abs, baseUrl);
+        dataUrl = await jcpCaptureImageViaTab(liveEl, r.abs);
         tabCaptures++;
       } catch (e) {
         // Give up on this image; the original (likely broken) URL stays.
@@ -500,10 +514,10 @@ async function jcpInlineImages(root, baseUrl) {
     }
 
     if (dataUrl) {
-      img.setAttribute("src", dataUrl);
-      img.removeAttribute("srcset");
-      img.removeAttribute("data-original");
-      img.removeAttribute("data-src");
+      r.img.setAttribute("src", dataUrl);
+      r.img.removeAttribute("srcset");
+      r.img.removeAttribute("data-original");
+      r.img.removeAttribute("data-src");
     }
   }
   return root;
