@@ -23,6 +23,10 @@ const SITE_CONTENT_SELECTORS = {
   // sidebar plus the usual prev/next/list nav instead of the actual post
   // (a single image), so point straight at the real content div.
   "qquing.net": "#bo_v_con",
+  // Readability grabbed the whole page shell — like/clip/report buttons,
+  // a bandwidth-savings widget, comments, and the "other issues" list table —
+  // instead of just the title + post image.
+  "aagag.com": "h1.title, #vContent",
 };
 
 // Extra elements to strip out of a SITE_CONTENT_SELECTORS match — post-footer
@@ -58,6 +62,7 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
   "m.dcinside.com",
   "www.ppomppu.co.kr",
   "www.todayhumor.co.kr",
+  "aagag.com",
 ]);
 
 // script/style/template content has no Markdown representation, but Turndown
