@@ -42,6 +42,10 @@ const SITE_CONTENT_SELECTORS = {
   // Readability grabbed comments, an "other posts" list, and category
   // filters. The real post is just the title heading plus this content div.
   "etoland.co.kr": "article h1, .view-content",
+  // Readability was pulling in Inven's gamification widget (#inventory-skin-*,
+  // a user-inventory/badge display, ~2800 chars) and a recommend-button block
+  // alongside the actual post.
+  "www.inven.co.kr": ".articleTitle h1, #powerbbsContent",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -108,6 +112,7 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
   "aagag.com",
   "web.humoruniv.com",
   "www.slrclub.com",
+  "www.inven.co.kr",
 ]);
 
 // script/style/template content has no Markdown representation, but Turndown

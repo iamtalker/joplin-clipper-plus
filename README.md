@@ -47,6 +47,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - 네이버 블로그처럼 실제 본문이 동일 출처 iframe 안에서 로드되는 사이트는 `SITE_IFRAME_SELECTORS`에 `호스트명: "iframe CSS 셀렉터"`를 추가하면 그 iframe 문서를 대신 분석합니다(Article 모드만 적용, Full Page/Bookmark 모드는 아직 미적용). Full Page 모드는 iframe 내용을 flatten하지 못해 이런 사이트에서는 여전히 빈 스냅샷이 나올 수 있습니다.
 
 ## 변경 이력
+- **0.19.0** — 인벤(inven.co.kr) 클리핑 지원 추가. 인벤 고유 기능인 "인벤토리" 위젯(사용자 뱃지/아이템 표시)이랑 추천 버튼 블록이 같이 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `.articleTitle h1, #powerbbsContent` 등록해서 해결. 이미지 CORS도 막혀있어 `SCREENSHOT_FALLBACK_HOSTS`에도 추가.
 - **0.18.1** — 네이버 블로그에서 사진이 여러 장일 때 일부만 원본 크기로 잡히고 나머지는 목록 썸네일 수준으로 작게 잡히던 문제 수정. 스마트에디터 ONE은 화면에 아직 안 보인 이미지를 `data-lazy-src` 속성에 원본 주소를 숨겨두고 `src`엔 작은 미리보기만 남겨두는데, 이 속성을 확인 안 하고 있었음(범용 개선, `jcpRealImgUrl`/`jcpInlineImages`에 `data-lazy-src` 지원 추가). ⚠️ 역시 라이브 테스트는 못 함, 확인 필요.
 - **0.18.0** — 이토랜드(etoland.co.kr) 클리핑 지원 추가. 댓글/다른글목록/카테고리 필터가 통째로 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `article h1, .view-content` 등록. 이 사이트 동영상은 `src`가 아니라 `data-src`에 실제 주소가 있는 지연로딩 방식이라 동영상이 아예 빠지던 문제도 발견 — `jcpCleanVideoTags`가 이제 `data-src`도 확인함(범용 개선, 다른 사이트에도 적용됨). 영상 재생 컨트롤 UI(시간/배속 표시) 텍스트 찌꺼기는 `SITE_CLEANUP_SELECTORS`로 제거.
 - **0.17.0** — SLR클럽(slrclub.com) 클리핑 지원 추가. 댓글/광고/이전글다음글 등이 같이 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `#userct` 등록해서 해결. 이미지 CORS도 막혀있어 `SCREENSHOT_FALLBACK_HOSTS`에도 추가.
