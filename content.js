@@ -66,6 +66,9 @@ const SITE_CLEANUP_SELECTORS = {
     ".adsbygoogle",
     "ins.adsbygoogle",
   ],
+  // Custom video-player chrome (speed/volume controls, progress bar) that
+  // sits as sibling divs next to a self-hosted <video> — see jcpCleanVideoTags.
+  "aagag.com": [".s_opt", ".v_progress"],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
@@ -251,6 +254,36 @@ function jcpApplyVideoPlaceholders(markdown, ids) {
   return result;
 }
 
+// Self-hosted <video> tags (meme/GIF-style clips, direct mp4/webm — not an
+// embedded player) have no Markdown representation either, and downloading +
+// base64-inlining them like images would bloat the note hugely for what's
+// usually several MB of video. Instead, replace the (often messy, with a
+// site's custom player chrome as sibling elements) original with one clean
+// <video controls src="..."> pointing at the original URL — Joplin's
+// renderer supports <video> natively — which Turndown is told to keep as
+// raw HTML via td.keep(["video"]) in jcpMakeTurndown().
+function jcpCleanVideoTags(root, baseUrl) {
+  root.querySelectorAll("video").forEach((video) => {
+    let src = video.getAttribute("src");
+    if (!src) {
+      const source = video.querySelector("source[src]");
+      if (source) src = source.getAttribute("src");
+    }
+    if (!src) return;
+    let abs;
+    try {
+      abs = new URL(src, baseUrl).href;
+    } catch (e) {
+      return;
+    }
+    const clean = document.createElement("video");
+    clean.setAttribute("controls", "");
+    clean.setAttribute("src", abs);
+    video.replaceWith(clean);
+  });
+  return root;
+}
+
 function jcpBlobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -419,6 +452,7 @@ function jcpMakeTurndown() {
     td.use(turndownPluginGfm.gfm);
   }
   td.remove(["script", "style", "noscript", "template"]);
+  td.keep(["video"]);
   return td;
 }
 
@@ -471,6 +505,7 @@ async function jcpClipArticle() {
   jcpStripNonContentTags(wrapper);
   jcpStripTrailingWireFooter(wrapper);
   const videoIds = jcpExtractVideoPlaceholders(wrapper);
+  jcpCleanVideoTags(wrapper, baseUrl);
   await jcpInlineImages(wrapper, baseUrl);
   const td = jcpMakeTurndown();
   const markdown = jcpApplyVideoPlaceholders(td.turndown(wrapper.innerHTML), videoIds);
@@ -510,6 +545,7 @@ async function jcpClipSelection() {
   jcpAbsolutize(container, location.href);
   jcpStripNonContentTags(container);
   const videoIds = jcpExtractVideoPlaceholders(container);
+  jcpCleanVideoTags(container, location.href);
   await jcpInlineImages(container, location.href);
   const td = jcpMakeTurndown();
   const markdown = jcpApplyVideoPlaceholders(td.turndown(container.innerHTML), videoIds);

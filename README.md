@@ -9,6 +9,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - 🔖 **Bookmark** — 링크 + 설명만 가볍게 저장
 - 노트북 선택, 태그 입력, 제목 수정 지원
 - 본문에 박힌 유튜브 임베드 영상은 조플린이 자동 재생 임베드하는 형태로 변환해서 저장 (Article/Selection 모드)
+- 사이트 자체 호스팅 동영상(mp4 등, 움짤 형식 포함)도 재생 가능한 `<video>` 태그로 저장 (Article/Selection 모드)
 
 ## 설치 방법
 
@@ -46,6 +47,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - 네이버 블로그처럼 실제 본문이 동일 출처 iframe 안에서 로드되는 사이트는 `SITE_IFRAME_SELECTORS`에 `호스트명: "iframe CSS 셀렉터"`를 추가하면 그 iframe 문서를 대신 분석합니다(Article 모드만 적용, Full Page/Bookmark 모드는 아직 미적용). Full Page 모드는 iframe 내용을 flatten하지 못해 이런 사이트에서는 여전히 빈 스냅샷이 나올 수 있습니다.
 
 ## 변경 이력
+- **0.15.0** — 유튜브가 아니라 **사이트 자체 호스팅 동영상**(`<video>` 태그, mp4 직링크 — 아아갓의 "움짤" 형식 등)이 통째로 빠지던 문제 해결. 원본 동영상 URL을 가리키는 깔끔한 `<video controls>` 태그로 변환해서 조플린에서 바로 재생되게 함(`jcpCleanVideoTags`). 용량이 커서 이미지처럼 base64로 내장하진 않고 원본 URL을 그대로 참조. 사이트마다 커스텀 재생 컨트롤 UI(속도조절, 프로그레스바 등)가 같이 붙어있으면 `SITE_CLEANUP_SELECTORS`로 제거(아아갓 `.s_opt`, `.v_progress` 적용).
 - **0.14.1** — 네이버 블로그 본문 위에 "공지 목록" 위젯이 같이 딸려오던 문제 수정. `SITE_CONTENT_SELECTORS`에 `.se-main-container`(스마트에디터 ONE의 본문 고정 클래스) 등록. ⚠️ 이것도 라이브 테스트는 못 하고 일반적으로 알려진 구조로 구현함.
 - **0.14.0** — 네이버 블로그(blog.naver.com) Article 모드 클리핑이 "파서 실패"로 아예 안 되던 문제 수정. 네이버 블로그는 실제 글 내용이 최상위 페이지가 아니라 `#mainFrame`이라는 iframe 안에서 로드되는데, 클리퍼는 최상위 페이지만 보고 있어서 본문 자체를 못 찾았던 것. `SITE_IFRAME_SELECTORS`(신규)로 동일 출처 iframe을 감지해서 그 iframe의 문서를 대신 분석하도록 수정(`jcpGetEffectiveDoc`). ⚠️ 브라우저 안전 정책상 blog.naver.com에 직접 접속해 테스트하지 못했음 — 일반적으로 알려진 구조를 바탕으로 구현, 실제 동작 확인 필요.
 - **0.13.0** — 아아갓(aagag.com) 클리핑 지원 추가. 클립/신고/정치 카테고리 버튼, 데이터 절약량 위젯, 여러 사이트 댓글 통계, "다른 이슈" 목록 표까지 통째로 딸려오던 문제 — `SITE_CONTENT_SELECTORS`에 `h1.title, #vContent`(제목+본문만) 등록. 이미지 CDN도 CORS가 막혀있어 `SCREENSHOT_FALLBACK_HOSTS`에도 추가.
