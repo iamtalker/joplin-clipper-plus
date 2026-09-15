@@ -162,6 +162,46 @@ function jcpStripWikiMetaLine(root) {
   return root;
 }
 
+// Wiki table-of-contents entries ("1. 개요", "2. 역사", ...) are laid out with
+// CSS (each entry an inline <span>, indentation for sub-sections done by
+// nesting an extra wrapper <div> per depth level rather than any text
+// indent) — losing that CSS once clipped runs every entry together on one
+// line. namu.wiki wraps its TOC in a real <details> element (a stable,
+// semantic HTML5 tag, unlike everything else on this site), so it can be
+// found reliably: rebuild it as one entry per line (a hard line break, so
+// turndown doesn't insert paragraph gaps between every item) with two
+// non-breaking spaces of indent per nesting level, inferred purely from how
+// many container elements sit between each entry and the <details> —
+// structural, not tied to any class name.
+function jcpFixWikiToc(root) {
+  root.querySelectorAll("details").forEach((details) => {
+    const entries = Array.from(details.querySelectorAll("a[href^='#s-']"))
+      .map((a) => a.closest("span, li, div"))
+      .filter(Boolean);
+    if (entries.length < 2) return;
+    const replacement = document.createElement("div");
+    const seen = new Set();
+    let first = true;
+    entries.forEach((entrySpan) => {
+      if (seen.has(entrySpan)) return;
+      seen.add(entrySpan);
+      let depth = 0;
+      let p = entrySpan.parentElement;
+      while (p && p !== details) {
+        depth++;
+        p = p.parentElement;
+      }
+      if (!first) replacement.appendChild(document.createElement("br"));
+      first = false;
+      const span = document.createElement("span");
+      span.textContent = "  ".repeat(Math.max(0, depth - 1)) + entrySpan.textContent.trim();
+      replacement.appendChild(span);
+    });
+    details.replaceWith(replacement);
+  });
+  return root;
+}
+
 // Extra elements to strip out of a SITE_CONTENT_SELECTORS match — post-footer
 // widgets (recommend buttons, attachment file lists, related-gallery boxes,
 // ad slots) that live inside the content container but aren't part of the post.
@@ -794,6 +834,7 @@ async function jcpClipArticle() {
   jcpStripNonContentTags(wrapper);
   jcpStripTrailingWireFooter(wrapper);
   jcpStripWikiAttributionNotice(wrapper);
+  jcpFixWikiToc(wrapper);
   const videoIds = jcpExtractVideoPlaceholders(wrapper);
   jcpCleanVideoTags(wrapper, baseUrl);
   await jcpInlineImages(wrapper, baseUrl);
