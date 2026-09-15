@@ -120,6 +120,48 @@ function jcpHeadingLCA(root) {
   return common[0] || null;
 }
 
+// The heading-LCA (see jcpHeadingLCA) sometimes includes a leading site
+// logo/banner that sits before the article's own first heading, since the
+// LCA is computed from the *headings* but still includes whatever else is a
+// child of the same containers. An article should start at its own title,
+// so drop every top-level child of root that comes before the one
+// containing the first heading.
+function jcpTrimBeforeFirstHeading(root) {
+  const heading = root.querySelector("h1, h2, h3, h4");
+  if (!heading) return root;
+  let containerChild = heading;
+  while (containerChild.parentElement && containerChild.parentElement !== root) {
+    containerChild = containerChild.parentElement;
+  }
+  if (containerChild.parentElement !== root) return root;
+  let sib = root.firstChild;
+  while (sib && sib !== containerChild) {
+    const next = sib.nextSibling;
+    sib.remove();
+    sib = next;
+  }
+  return root;
+}
+
+// MediaWiki-family wiki engines (namu.wiki's "the seed" included) show a
+// "최근 수정 시각: ..." (last modified) line and a "분류" (category) tag list
+// right under the title — page metadata, not article content. Matched by
+// text pattern, same reasoning as jcpStripWikiAttributionNotice: these
+// engines use build-hashed classes, so a class-based selector wouldn't hold
+// up (and may not even match consistently across different articles on the
+// same site, since Vue's scoped-style hash is per component, not global).
+function jcpStripWikiMetaLine(root) {
+  root.querySelectorAll("div, span, p").forEach((el) => {
+    const text = el.textContent.trim();
+    if (text.length < 60 && /^최근\s*수정\s*시각\s*[:：]/.test(text)) el.remove();
+  });
+  root.querySelectorAll("div, section").forEach((el) => {
+    const text = el.textContent.replace(/\s+/g, " ").trim();
+    if (text.length > 0 && text.length < 200 && /^분류/.test(text)) el.remove();
+  });
+  return root;
+}
+
 // Extra elements to strip out of a SITE_CONTENT_SELECTORS match — post-footer
 // widgets (recommend buttons, attachment file lists, related-gallery boxes,
 // ad slots) that live inside the content container but aren't part of the post.
@@ -223,7 +265,7 @@ function jcpApplyTitleLabels(root, selectors) {
 // nav links and "author | date | 조회 N" meta lines — that Readability's
 // scoring sometimes keeps because it sits right next to the real post body.
 function jcpStripBoardChrome(root) {
-  const NAV_LABEL = /^(이전\s*\S*글?|다음\s*\S*글?|목록|랜덤\s*\S*|list|prev(ious)?|next)$/i;
+  const NAV_LABEL = /^(이전\s*\S*글?|다음\s*\S*글?|목록|랜덤\s*\S*|list|prev(ious)?|next|편집|토론|역사)$/i;
   root.querySelectorAll("p, div, li, ul, nav").forEach((el) => {
     const text = el.textContent.trim();
     if (!text || text.length > 60) return;
@@ -731,11 +773,15 @@ async function jcpClipArticle() {
       headingLCA && headingLCALen > readabilityLen * 1.5 && bodyTextLen > 0 && headingLCALen < bodyTextLen * 0.7;
 
     if (preferHeadingLCA) {
+      jcpTrimBeforeFirstHeading(headingLCA);
+      jcpStripWikiMetaLine(headingLCA);
       jcpStripBoardChrome(headingLCA);
       article = { title: document.title, content: headingLCA.innerHTML, excerpt: "", byline: "" };
     } else if (readabilityArticle) {
       article = readabilityArticle;
     } else if (headingLCA) {
+      jcpTrimBeforeFirstHeading(headingLCA);
+      jcpStripWikiMetaLine(headingLCA);
       jcpStripBoardChrome(headingLCA);
       article = { title: document.title, content: headingLCA.innerHTML, excerpt: "", byline: "" };
     } else {
