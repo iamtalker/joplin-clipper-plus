@@ -277,6 +277,23 @@ function jcpStripTrailingWireFooter(root) {
   return root;
 }
 
+// "the seed" wiki engine (namu.wiki and other wikis built on it) inserts a
+// standalone notice — "이 문서의 내용 중 전체 또는 일부는 [문서명] 문서의 rNNN 판에서
+// 가져왔습니다. 이전 역사 보러 가기" — wherever a section's content was forked from
+// another page's revision (a CC BY-NC-SA attribution requirement, not article
+// content). Matched by text pattern rather than any class name, since this
+// engine also uses build-hashed classes; only removes small blocks that are
+// essentially just this notice, so real paragraphs mentioning similar words
+// in passing are left alone.
+function jcpStripWikiAttributionNotice(root) {
+  const PATTERN = /이\s*문서의\s*내용\s*중\s*전체\s*또는\s*일부는[\s\S]*?판에서\s*가져왔습니다/;
+  root.querySelectorAll("div, p").forEach((el) => {
+    const text = el.textContent.replace(/\s+/g, " ").trim();
+    if (PATTERN.test(text) && text.length < 300) el.remove();
+  });
+  return root;
+}
+
 // Embedded <iframe> players (YouTube, etc.) have no Markdown representation
 // and Turndown just drops them. Joplin's renderer will auto-embed a YouTube
 // video, but ONLY if the URL sits completely alone on its own line — wrapping
@@ -519,12 +536,40 @@ function jcpFindLiveImg(absSrc, baseUrl) {
   });
 }
 
+// Some images are sized only via external CSS or a relative unit tied to a
+// parent container (namu.wiki's flag/icon templates use height="100%" with
+// no pixel width/height at all) — clipped in isolation, that sizing info is
+// meaningless and the image can render at its full native size instead of
+// the small icon it actually was on the page. Bake in the live, actually-
+// rendered CSS-pixel size as explicit width/height attributes so it survives
+// being lifted out of the page. jcpMakeTurndown() then keeps small images
+// (<=100px) as raw HTML so those attributes aren't lost in the markdown
+// conversion, which normal ![]() syntax can't carry at all.
+function jcpPreserveRenderedImageSize(img, baseUrl) {
+  const src = jcpRealImgUrl(img);
+  if (!src) return;
+  let abs;
+  try {
+    abs = new URL(src, baseUrl).href;
+  } catch (e) {
+    return;
+  }
+  const liveEl = jcpFindLiveImg(abs, baseUrl);
+  if (!liveEl) return;
+  const rect = liveEl.getBoundingClientRect();
+  if (rect.width >= 1 && rect.height >= 1) {
+    img.setAttribute("width", String(Math.round(rect.width)));
+    img.setAttribute("height", String(Math.round(rect.height)));
+  }
+}
+
 async function jcpInlineImages(root, baseUrl) {
   const MAX_BYTES = 6 * 1024 * 1024;
   const MAX_TAB_CAPTURES = 20; // captureVisibleTab is rate-limited; cap the fallback
   const imgs = Array.from(
     root.querySelectorAll("img[src], img[data-original], img[data-lazy-src], img[data-src]")
   );
+  imgs.forEach((img) => jcpPreserveRenderedImageSize(img, baseUrl));
 
   // Phase 1: fetch() every image concurrently — this is the common, fast
   // path (most sites need no fallback at all) and has no reason to be
@@ -606,6 +651,23 @@ function jcpMakeTurndown() {
   }
   td.remove(["script", "style", "noscript", "template"]);
   td.keep(["video"]);
+  // Standard markdown image syntax (![]()) carries no size information, so a
+  // small inline icon (wiki flag templates etc. — see jcpPreserveRenderedImageSize)
+  // would lose its baked-in width/height and could render at native/huge size
+  // instead. Keep small images as raw <img> HTML instead so the size sticks;
+  // normal content-sized photos still convert to plain markdown as before.
+  // Uses addRule (not keep) because turndown checks its regular rule array —
+  // which includes the built-in image rule — before the _keep list, so a
+  // keep() filter for "img" would never actually run.
+  td.addRule("jcpSmallImageAsHtml", {
+    filter: (node) => {
+      if (node.nodeName !== "IMG") return false;
+      const w = parseInt(node.getAttribute("width") || "0", 10);
+      const h = parseInt(node.getAttribute("height") || "0", 10);
+      return w > 0 && w <= 100 && h > 0 && h <= 100;
+    },
+    replacement: (content, node) => node.outerHTML,
+  });
   return td;
 }
 
@@ -685,6 +747,7 @@ async function jcpClipArticle() {
   wrapper.innerHTML = article.content;
   jcpStripNonContentTags(wrapper);
   jcpStripTrailingWireFooter(wrapper);
+  jcpStripWikiAttributionNotice(wrapper);
   const videoIds = jcpExtractVideoPlaceholders(wrapper);
   jcpCleanVideoTags(wrapper, baseUrl);
   await jcpInlineImages(wrapper, baseUrl);
