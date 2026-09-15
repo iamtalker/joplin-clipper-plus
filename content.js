@@ -88,6 +88,38 @@ function jcpGetEffectiveDoc() {
   return { doc: document, baseUrl: location.href };
 }
 
+// Readability scores candidates by <p>/<td> text density, which works poorly
+// on sites (wiki-style SPAs especially, e.g. namu.wiki) that spread an
+// article's real content across many separate sibling branches rather than
+// one dense container — Readability ends up picking just one small branch and
+// silently dropping the rest, with no error. This is a structural fallback
+// that doesn't depend on any site's (often build-hashed, unstable) class
+// names: find the lowest common ancestor of every heading (h1–h4) on the
+// page. An article's headings mark its section boundaries, so their LCA
+// should span the whole article while still excluding unrelated page chrome
+// (nav/sidebar/footer) that sits outside it — unless the page barely has
+// headings, in which case this returns null and Readability's result is used
+// as-is.
+function jcpHeadingLCA(root) {
+  const headings = Array.from(root.querySelectorAll("h1, h2, h3, h4"));
+  if (headings.length < 2) return null;
+  function ancestorsOf(el) {
+    const arr = [];
+    let p = el;
+    while (p) {
+      arr.push(p);
+      p = p.parentElement;
+    }
+    return arr;
+  }
+  let common = ancestorsOf(headings[0]);
+  for (let i = 1; i < headings.length; i++) {
+    const set = new Set(ancestorsOf(headings[i]));
+    common = common.filter((el) => set.has(el));
+  }
+  return common[0] || null;
+}
+
 // Extra elements to strip out of a SITE_CONTENT_SELECTORS match — post-footer
 // widgets (recommend buttons, attachment file lists, related-gallery boxes,
 // ad slots) that live inside the content container but aren't part of the post.
@@ -614,11 +646,39 @@ async function jcpClipArticle() {
     jcpApplyTitleLabels(container, SITE_LABEL_FROM_TITLE_SELECTORS[location.hostname]);
     article = { title: document.title, content: container.innerHTML, excerpt: "", byline: "" };
   } else {
+    // Measured on its own clone, kept untouched — Readability.parse() mutates
+    // its document in place as part of scoring/cleanup, which would corrupt
+    // this reference if it shared a clone with the Readability call below.
+    const docCloneForLCA = effectiveDoc.cloneNode(true);
+    jcpAbsolutize(docCloneForLCA, baseUrl);
+    const headingLCA = jcpHeadingLCA(docCloneForLCA);
+    const headingLCALen = headingLCA ? headingLCA.textContent.trim().length : 0;
+    const bodyTextLen = docCloneForLCA.body ? docCloneForLCA.body.textContent.trim().length : 0;
+
     const docClone = effectiveDoc.cloneNode(true);
     jcpAbsolutize(docClone, baseUrl);
     jcpStripBoardChrome(docClone);
-    article = new Readability(docClone).parse();
-    if (!article) return { error: "Readability could not parse this page." };
+    const readabilityArticle = new Readability(docClone).parse();
+    const readabilityLen = readabilityArticle ? readabilityArticle.textContent.trim().length : 0;
+
+    // Only switch to the heading-LCA when it's substantially bigger (not just
+    // noise) and still clearly narrower than the whole page (not "nav +
+    // sidebar + everything" — i.e. the page barely has distinguishing
+    // headings and the LCA walked almost all the way up to <body>).
+    const preferHeadingLCA =
+      headingLCA && headingLCALen > readabilityLen * 1.5 && bodyTextLen > 0 && headingLCALen < bodyTextLen * 0.7;
+
+    if (preferHeadingLCA) {
+      jcpStripBoardChrome(headingLCA);
+      article = { title: document.title, content: headingLCA.innerHTML, excerpt: "", byline: "" };
+    } else if (readabilityArticle) {
+      article = readabilityArticle;
+    } else if (headingLCA) {
+      jcpStripBoardChrome(headingLCA);
+      article = { title: document.title, content: headingLCA.innerHTML, excerpt: "", byline: "" };
+    } else {
+      return { error: "Readability could not parse this page." };
+    }
   }
 
   const wrapper = document.createElement("div");
