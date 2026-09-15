@@ -175,7 +175,12 @@ function jcpStripWikiMetaLine(root) {
 // structural, not tied to any class name.
 function jcpFixWikiToc(root) {
   root.querySelectorAll("details").forEach((details) => {
-    const entries = Array.from(details.querySelectorAll("a[href^='#s-']"))
+    // jcpAbsolutize() runs before this (on the clone headingLCA is derived
+    // from) and rewrites these fragment-only hrefs ("#s-1") into absolute
+    // URLs ("https://namu.wiki/w/...#s-1"), so a startsWith match (^=) never
+    // matches post-absolutize — use a substring match instead so this still
+    // finds the entries regardless of whether absolutize already ran.
+    const entries = Array.from(details.querySelectorAll("a[href*='#s-']"))
       .map((a) => a.closest("span, li, div"))
       .filter(Boolean);
     if (entries.length < 2) return;
