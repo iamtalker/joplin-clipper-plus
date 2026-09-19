@@ -64,6 +64,12 @@ const SITE_CONTENT_SELECTORS = {
   // .article-content alone is exactly the post content, nothing else, so no
   // separate cleanup selectors are even needed here.
   "arca.live": ".fr-view.article-content",
+  // Readability was grabbing the 13000+ char comment thread (.read_bottom)
+  // and/or the Naver ad slot (.powerAD) alongside — both are siblings of the
+  // actual post body (#articleBody) inside the same #column2 container, not
+  // wrapped in anything that separates them, so Readability's density
+  // scoring had no reason to prefer just the post.
+  "www.82cook.com": "h4.title.bbstitle, #readHead, #articleBody",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
