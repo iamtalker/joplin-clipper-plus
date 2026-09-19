@@ -230,6 +230,12 @@ const SITE_CLEANUP_SELECTORS = {
   // Custom video-player control bar (timestamp, speed selector) rendered as
   // a sibling of the <video> element itself.
   "etoland.co.kr": ['[class*="peer/controls"]'],
+  // A literal <img src="/images/loading_bar2.gif"> sits right before every
+  // real photo in the raw HTML, hidden via an onload handler once the real
+  // image finishes loading on the live page. That script never runs on our
+  // cloned/detached copy, so without this the loading-bar graphic itself
+  // gets treated as real content and clipped in alongside every photo.
+  "web.humoruniv.com": ['img[src*="loading_bar"]'],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
