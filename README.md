@@ -48,6 +48,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - `SITE_CONTENT_SELECTORS`에 등록되지 않은 사이트는 Readability를 쓰는데, 이게 본문 일부만 가져오는 경우(나무위키 등 빌드마다 클래스명이 바뀌는 SPA에서 흔함) `jcpHeadingLCA`가 자동으로 h1~h4 제목들의 공통 부모를 대신 시도합니다 — Readability보다 1.5배 이상 크면서 전체 페이지의 70% 미만일 때만 교체되는 보수적인 조건이라, 대부분의 정상 사이트에는 영향 없습니다. 그래도 여전히 부족하면 그 사이트도 `SITE_CONTENT_SELECTORS`로 직접 지정해주세요.
 
 ## 변경 이력
+- **0.27.0** — 루리웹(bbs.ruliweb.com) 지원 추가. 페이지 안에 h1~h4 제목이 38개나 흩어져 있어(내비게이션/사이드바/인기글 위젯 등) heading-LCA가 거의 `<body>`까지 올라가버리고, Readability의 밀도 점수도 댓글창이나 관련글 사이드바에 밀려 본문 대신 엉뚱한 내용을 가져오던 문제. `SITE_CONTENT_SELECTORS`로 제목(`h4.subject`)과 본문(`.view_content.autolink`)을 직접 지정해서 해결. 제목에 붙는 댓글 수 배지(`.reply_count`)와, 영상 위젯의 재생/공유/새창 버튼 텍스트가 같이 딸려오던 것도 `SITE_CLEANUP_SELECTORS`로 제거.
 - **0.26.1** — 휴먼유니브(web.humoruniv.com)에서 사진마다 위아래로 로딩바 같은 이미지가 같이 딸려오던 문제 수정. 원인은 `<img src="/images/loading_bar2.gif">`가 실제 사진 바로 앞에 진짜 HTML로 박혀있고, 원본 사이트에서는 사진 로딩이 끝나면 `onload` 스크립트가 숨기는 방식이었는데, 클리핑한 사본에서는 그 스크립트가 안 돌아서 그대로 남아있었던 것. `SITE_CLEANUP_SELECTORS`에 `img[src*="loading_bar"]` 추가해서 제거.
 - **0.26.0** — 82cook.com 지원 추가. Readability가 본문(`#articleBody`) 대신 댓글(`.read_bottom`, 13,000자 이상)이나 네이버 광고(`.powerAD`)까지 같이 가져오던 문제 — 셋 다 같은 `#column2` 컨테이너 안에 나란히 있는 형제 요소라 밀도 기준만으로는 구분이 안 됐음. `SITE_CONTENT_SELECTORS`에 제목/작성정보/본문만 정확히 지정해서 해결.
 - **0.25.3** — 크롬 웹 스토어 제출 거부 대응: "개인정보처리방침 링크가 올바른 정책 페이지로 연결되지 않음" 사유로 거부되어(레포 메인 페이지 링크를 제출했었음 — 소유자 사이트는 정책으로 인정 안 됨), 전용 [PRIVACY_POLICY.md](PRIVACY_POLICY.md) 문서를 새로 작성해 추가. 대시보드에는 이 파일을 가리키는 개별 URL을 제출해야 함.

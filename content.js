@@ -64,6 +64,11 @@ const SITE_CONTENT_SELECTORS = {
   // .article-content alone is exactly the post content, nothing else, so no
   // separate cleanup selectors are even needed here.
   "arca.live": ".fr-view.article-content",
+  // The page has ~38 h1-h4 headings scattered across nav/sidebar/"인기글"
+  // widgets, so heading-LCA climbs almost to <body> and Readability's
+  // density scoring loses to the comment thread / related-post sidebar —
+  // Readability was grabbing unrelated content instead of the actual post.
+  "bbs.ruliweb.com": "h4.subject, .view_content.autolink",
   // Readability was grabbing the 13000+ char comment thread (.read_bottom)
   // and/or the Naver ad slot (.powerAD) alongside — both are siblings of the
   // actual post body (#articleBody) inside the same #column2 container, not
@@ -236,6 +241,13 @@ const SITE_CLEANUP_SELECTORS = {
   // cloned/detached copy, so without this the loading-bar graphic itself
   // gets treated as real content and clipped in alongside every photo.
   "web.humoruniv.com": ['img[src*="loading_bar"]'],
+  // .reply_count is a "[4]"-style comment-count badge nested right inside
+  // the title heading. .rv-video-control-panel is custom video-player
+  // chrome (play/volume/공유/새창 buttons) sitting as a sibling of the
+  // <video> itself — its button labels are plain text, so without this
+  // they'd leak into the markdown as stray "공유새창" noise (see jcpCleanVideoTags,
+  // which only replaces the <video> tag, not sibling chrome around it).
+  "bbs.ruliweb.com": [".reply_count", ".rv-video-control-panel"],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
