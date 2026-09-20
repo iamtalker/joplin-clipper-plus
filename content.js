@@ -689,18 +689,12 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
     // between two consecutive segments, which reads as a real duplication
     // bug rather than a deliberate seam guard.
     //
-    // KNOWN ISSUE, unresolved and paused: on at least one site (humoruniv,
-    // for a single-file image ~28000px tall) a seam between two segments
-    // can still show ghosted/doubled content. Ruled out so far, each with
-    // its own attempted fix that didn't help: our own scroll animation
-    // (forced instant scroll), overlap-percentage sizing (shrunk 5% -> 2px),
-    // page-driven scroll drift during the capture throttle wait (diagnostic
-    // logging showed zero drift, exact expected coordinates every time),
-    // and incomplete image decode (added liveImgEl.decode() before
-    // capturing — did not fix it either). Root cause not found; not
-    // reproduced on other SCREENSHOT_FALLBACK_HOSTS sites. See
-    // README.md's 알려진 제한사항 and project memory for the full history
-    // before attempting another fix.
+    // A ghosted/doubled-content bug was chased here for a long time
+    // (scroll animation, overlap sizing, scroll drift during the capture
+    // throttle wait, incomplete image decode — see git history around this
+    // comment) before finding the actual cause was downstream, in how
+    // jcpInlineImages inserts the resulting segments — see the comment
+    // there. The capture logic itself was never the problem.
     const MAX_SEGMENTS = 25;
     const dataUrls = [];
     for (let i = 0; i < MAX_SEGMENTS; i++) {
@@ -716,14 +710,7 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       if (res && res.ok) dataUrls.push(res.dataUrl);
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
       window.scrollBy({ top: window.innerHeight - 2, left: 0, behavior: "instant" });
-      // TEST (per external suggestion, unverified): force a synchronous
-      // reflow, then wait two consecutive animation frames instead of a
-      // fixed setTimeout, on the theory that a fixed delay doesn't actually
-      // guarantee the browser has painted the newly-scrolled-in region
-      // before the next capture fires. Known-unresolved bug this targets:
-      // see the "KNOWN ISSUE" comment above.
-      document.body.offsetHeight; // eslint-disable-line no-unused-expressions
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await new Promise((r) => setTimeout(r, 200));
     }
     return dataUrls.length ? dataUrls : null;
   } finally {
@@ -847,17 +834,36 @@ async function jcpInlineImages(root, baseUrl) {
       // A single-file image too tall for even a maximally zoomed-out
       // screenshot (see jcpCaptureImageViaTab) came back as several scrolled
       // segments — lay them out in reading order (top to bottom) instead of
-      // forcing them into one image. Each <img> is wrapped in its own <div>:
-      // bare <img> tags are inline elements and would otherwise just flow
-      // left-to-right side by side (wrapping into rows) instead of stacking,
-      // which is meaningless for a vertical strip like this.
+      // forcing them into one image.
+      //
+      // Originally each segment was wrapped in its own <div> to force a
+      // vertical stack (bare sibling <img> tags are inline and just flow
+      // left-to-right instead). That div-wrapping was the real cause of
+      // the "ghosted/overlapping" note content reported on humoruniv,
+      // chased for a long time as a capture-timing/GPU-compositor bug
+      // before the actual mechanism was found: the original single <img>
+      // there sits inside an inline <b> tag (IMG > SPAN > B > P). Swapping
+      // it for several sibling <div>s put block elements inside an inline
+      // one in the live DOM — harmless there, but jcpClipArticle serializes
+      // the whole wrapper back to an HTML *string* (`wrapper.innerHTML`)
+      // for Turndown to re-parse, and the HTML5 parser's "adoption agency"
+      // algorithm doesn't allow a block element inside an open inline
+      // formatting element: it implicitly closes the <b> before each <div>
+      // and reopens a *new* <b> after it. One "<b>...</b>" around the
+      // original image became several independently-reconstructed
+      // "<b>"s, one per segment — which Turndown then rendered as
+      // mismatched/interleaved "**" runs, and Joplin's markdown renderer
+      // turned that broken bold nesting into the reported stray blank
+      // gaps and doubled-looking text. <img>/<br> are both inline, so
+      // nesting them inside <b> never triggers that reconstruction — the
+      // original single <b> survives intact, and turndown's hard-line-
+      // break rule for <br> still puts each segment on its own line.
       const frag = document.createDocumentFragment();
-      dataUrls.forEach((du) => {
-        const wrapperDiv = document.createElement("div");
+      dataUrls.forEach((du, i) => {
+        if (i > 0) frag.appendChild(document.createElement("br"));
         const seg = document.createElement("img");
         seg.setAttribute("src", du);
-        wrapperDiv.appendChild(seg);
-        frag.appendChild(wrapperDiv);
+        frag.appendChild(seg);
       });
       r.img.replaceWith(frag);
     }
