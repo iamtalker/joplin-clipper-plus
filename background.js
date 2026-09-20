@@ -117,11 +117,7 @@ async function captureImageRect(tabId, rect) {
   ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
   const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
   const base64 = await arrayBufferToBase64(await outBlob.arrayBuffer());
-  // TEMPORARY DIAGNOSTIC (see content.js's jcpCaptureImageViaTab): report
-  // exactly what was cropped from the full-tab screenshot, so it can be
-  // compared against what the caller *thought* it was asking for.
-  const debug = { sx, sy, sw, sh, bitmapWidth: bitmap.width, bitmapHeight: bitmap.height };
-  return { dataUrl: `data:image/jpeg;base64,${base64}`, debug };
+  return `data:image/jpeg;base64,${base64}`;
 }
 
 // Safety net for the whole clip operation: content.js has its own per-image
@@ -201,8 +197,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
         sendResponse({ ok: true, note, preview: clip });
       } else if (msg.type === "captureImageRect") {
-        const { dataUrl, debug } = await captureImageRect(sender.tab.id, msg.rect);
-        sendResponse({ ok: true, dataUrl, debug });
+        const dataUrl = await captureImageRect(sender.tab.id, msg.rect);
+        sendResponse({ ok: true, dataUrl });
       } else if (msg.type === "getZoom") {
         const zoom = await chrome.tabs.getZoom(sender.tab.id);
         sendResponse({ ok: true, zoom });

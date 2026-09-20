@@ -689,18 +689,18 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
     // between two consecutive segments, which reads as a real duplication
     // bug rather than a deliberate seam guard.
     //
-    // TEMPORARY DIAGNOSTIC LOGGING (console, prefix "[JCP-DEBUG]"): the
-    // seam bug survived both an overlap-percentage fix and a scroll-
-    // behavior fix, which rules out our own scroll animation as the cause.
-    // Leading theory now: something scrolls the page on its own (a sticky
-    // banner reacting to scroll, or Chrome's own scroll-anchoring
-    // compensating once another lazily-loading image on the page settles
-    // its size) during the ~550ms captureVisibleTab throttle wait — after
-    // we've measured `rect` but before the screenshot actually fires. If
-    // that's true, window.scrollY read right before vs. right after the
-    // capture message round-trip should differ even though nothing in our
-    // own code scrolls during that window. Remove this block once the
-    // cause is confirmed (or ruled out) and a real fix lands.
+    // KNOWN ISSUE, unresolved and paused: on at least one site (humoruniv,
+    // for a single-file image ~28000px tall) a seam between two segments
+    // can still show ghosted/doubled content. Ruled out so far, each with
+    // its own attempted fix that didn't help: our own scroll animation
+    // (forced instant scroll), overlap-percentage sizing (shrunk 5% -> 2px),
+    // page-driven scroll drift during the capture throttle wait (diagnostic
+    // logging showed zero drift, exact expected coordinates every time),
+    // and incomplete image decode (added liveImgEl.decode() before
+    // capturing — did not fix it either). Root cause not found; not
+    // reproduced on other SCREENSHOT_FALLBACK_HOSTS sites. See
+    // README.md's 알려진 제한사항 and project memory for the full history
+    // before attempting another fix.
     const MAX_SEGMENTS = 25;
     const dataUrls = [];
     for (let i = 0; i < MAX_SEGMENTS; i++) {
@@ -709,23 +709,10 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       const visTop = Math.max(0, rect.top);
       const visBottom = Math.min(window.innerHeight, rect.bottom);
       if (visBottom - visTop < 1) break;
-
-      const scrollYBefore = window.scrollY;
-      const tBefore = performance.now();
       const res = await chrome.runtime.sendMessage({
         type: "captureImageRect",
         rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
       });
-      const scrollYAfter = window.scrollY;
-      const tAfter = performance.now();
-      console.log(
-        `[JCP-DEBUG] segment ${i}: rect.top=${rect.top.toFixed(2)} rect.bottom=${rect.bottom.toFixed(2)} ` +
-          `visTop=${visTop.toFixed(2)} visBottom=${visBottom.toFixed(2)} ` +
-          `scrollYBefore=${scrollYBefore} scrollYAfter=${scrollYAfter} drift=${scrollYAfter - scrollYBefore} ` +
-          `elapsedMs=${(tAfter - tBefore).toFixed(0)} innerHeight=${window.innerHeight} dpr=${dpr} ` +
-          `cropDebug=${res && res.debug ? JSON.stringify(res.debug) : "n/a"}`
-      );
-
       if (res && res.ok) dataUrls.push(res.dataUrl);
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
       window.scrollBy({ top: window.innerHeight - 2, left: 0, behavior: "instant" });
