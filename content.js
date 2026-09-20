@@ -627,7 +627,13 @@ async function jcpWaitForRealSrc(liveEl, targetAbsUrl, timeoutMs) {
 async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   if (!liveImgEl) return null;
 
-  liveImgEl.scrollIntoView({ block: "start", inline: "center" });
+  // Forced to "instant": a page with CSS `scroll-behavior: smooth` (common)
+  // would otherwise animate every scroll here over several hundred ms, and
+  // a screenshot taken before that animation finishes captures a half-
+  // scrolled, blended frame — the previous segment's tail end and the next
+  // segment's start overlaid on top of each other. That looked like (and
+  // was reported as) duplicated/overlapping content, not a timing bug.
+  liveImgEl.scrollIntoView({ block: "start", inline: "center", behavior: "instant" });
   await new Promise((r) => setTimeout(r, 150));
   if (targetAbsUrl) await jcpWaitForRealSrc(liveImgEl, targetAbsUrl, 4000);
 
@@ -644,7 +650,7 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       await chrome.runtime.sendMessage({ type: "setZoom", factor: zoomToFit });
       appliedZoom = zoomToFit;
       await new Promise((r) => setTimeout(r, 350));
-      liveImgEl.scrollIntoView({ block: "start", inline: "center" });
+      liveImgEl.scrollIntoView({ block: "start", inline: "center", behavior: "instant" });
       await new Promise((r) => setTimeout(r, 150));
       rect = liveImgEl.getBoundingClientRect();
     }
@@ -686,7 +692,7 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       });
       if (res && res.ok) dataUrls.push(res.dataUrl);
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
-      window.scrollBy(0, window.innerHeight - 2);
+      window.scrollBy({ top: window.innerHeight - 2, left: 0, behavior: "instant" });
       await new Promise((r) => setTimeout(r, 200));
     }
     return dataUrls.length ? dataUrls : null;
