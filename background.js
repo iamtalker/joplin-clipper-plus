@@ -86,18 +86,22 @@ async function throttleCapture() {
 async function captureVisibleTabThrottled(windowId) {
   await throttleCapture();
   try {
-    return await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+    return await chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 90 });
   } catch (e) {
     if (!/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/.test(e.message || "")) throw e;
     await new Promise((r) => setTimeout(r, MIN_CAPTURE_INTERVAL_MS));
     lastCaptureAt = Date.now();
-    return chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+    return chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 90 });
   }
 }
 
 // Fallback for images fetch() can't read due to CORS (see content.js). We
 // screenshot the whole visible tab, then crop to just the image's rect in an
 // OffscreenCanvas — screenshot pixels aren't subject to the CORS check.
+// Captured/output as JPEG rather than PNG: a very tall image can mean
+// dozens of these in one clip (see jcpCaptureImageViaTab's segmented
+// capture), and PNG's slower encode + much bigger base64 payload was a real
+// contributor to clips timing out on those.
 async function captureImageRect(tabId, rect) {
   const tab = await chrome.tabs.get(tabId);
   const shotDataUrl = await captureVisibleTabThrottled(tab.windowId);
@@ -111,9 +115,9 @@ async function captureImageRect(tabId, rect) {
   const canvas = new OffscreenCanvas(sw, sh);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
-  const outBlob = await canvas.convertToBlob({ type: "image/png" });
+  const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
   const base64 = await arrayBufferToBase64(await outBlob.arrayBuffer());
-  return `data:image/png;base64,${base64}`;
+  return `data:image/jpeg;base64,${base64}`;
 }
 
 // Safety net for the whole clip operation: content.js has its own per-image
@@ -178,8 +182,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         const clip = await withTimeout(
           runClipOnTab(tab.id, msg.mode),
-          45000,
-          "클리핑이 45초 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
+          120000,
+          "클리핑이 2분 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
         );
         if (clip.error) {
           sendResponse({ ok: false, error: clip.error });
