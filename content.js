@@ -665,9 +665,13 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       return res && res.ok ? [res.dataUrl] : null;
     }
 
-    // Still taller than one screen — scroll and capture in overlapping
-    // segments (5% overlap) so no sliver gets lost to rounding at the seam
-    // between two segments.
+    // Still taller than one screen — scroll and capture in segments. Scrolls
+    // by just under a full viewport (not a full 100%) purely as a rounding
+    // safety margin against losing a sub-pixel sliver at the seam — a
+    // bigger overlap (an earlier version used 5%) is easily wide enough to
+    // visibly repeat content (a whole line of dialogue, a character's face)
+    // between two consecutive segments, which reads as a real duplication
+    // bug rather than a deliberate seam guard.
     const MAX_SEGMENTS = 25;
     const dataUrls = [];
     for (let i = 0; i < MAX_SEGMENTS; i++) {
@@ -682,7 +686,7 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       });
       if (res && res.ok) dataUrls.push(res.dataUrl);
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
-      window.scrollBy(0, window.innerHeight * 0.95);
+      window.scrollBy(0, window.innerHeight - 2);
       await new Promise((r) => setTimeout(r, 200));
     }
     return dataUrls.length ? dataUrls : null;
