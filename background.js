@@ -63,12 +63,44 @@ async function arrayBufferToBase64(buf) {
   return btoa(binary);
 }
 
+// chrome.tabs.captureVisibleTab enforces its own quota (Chrome allows at
+// most ~2 calls/second per profile) — a post with several images in a row
+// that all need the screenshot fallback (see SCREENSHOT_FALLBACK_HOSTS in
+// content.js) can fire captures faster than that. When the quota is hit the
+// call just throws, which the caller in content.js catches and silently
+// gives up on that one image — the site's original (CORS-blocked, so
+// unloadable once clipped) URL is left in place, which is what actually
+// looked like "some images go missing" from a multi-image post. Throttle
+// every call to at least MIN_CAPTURE_INTERVAL_MS apart, and retry once if
+// the quota error slips through anyway (e.g. another tab captured around
+// the same time).
+const MIN_CAPTURE_INTERVAL_MS = 550;
+let lastCaptureAt = 0;
+
+async function throttleCapture() {
+  const wait = lastCaptureAt + MIN_CAPTURE_INTERVAL_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastCaptureAt = Date.now();
+}
+
+async function captureVisibleTabThrottled(windowId) {
+  await throttleCapture();
+  try {
+    return await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+  } catch (e) {
+    if (!/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/.test(e.message || "")) throw e;
+    await new Promise((r) => setTimeout(r, MIN_CAPTURE_INTERVAL_MS));
+    lastCaptureAt = Date.now();
+    return chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+  }
+}
+
 // Fallback for images fetch() can't read due to CORS (see content.js). We
 // screenshot the whole visible tab, then crop to just the image's rect in an
 // OffscreenCanvas — screenshot pixels aren't subject to the CORS check.
 async function captureImageRect(tabId, rect) {
   const tab = await chrome.tabs.get(tabId);
-  const shotDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  const shotDataUrl = await captureVisibleTabThrottled(tab.windowId);
   const shotBlob = await (await fetch(shotDataUrl)).blob();
   const bitmap = await createImageBitmap(shotBlob);
   const dpr = rect.dpr || 1;
