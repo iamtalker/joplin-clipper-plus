@@ -496,32 +496,44 @@ function jcpBlobToDataUrl(blob) {
 
 // High-resolution photos (some sites serve originals well over 2000px on the
 // long side) make for slow, heavy clips once base64-encoded — a full-res
-// image isn't needed to read a note later. Downscale anything bigger than
-// MAX_DIM and re-encode as JPEG, which is usually a large size win for
-// photographic content. Runs on a blob: URL of bytes we already fetched
-// ourselves, so this never hits canvas cross-origin tainting.
+// image isn't needed to read a note later. Downscale by WIDTH (not the
+// longest edge) and re-encode as JPEG. Capping by longest edge used to
+// crush extremely tall, narrow images — a single-file vertical webtoon
+// strip, aspect ratio 1:35+ isn't unusual — down to an unreadably thin
+// sliver, since height alone blew past the cap and dragged width down
+// with it even though the width itself was already perfectly reasonable.
+// MAX_HEIGHT stays only as a crash-guard for pathological cases (nothing
+// real is expected to hit it); wrapped in try/catch since an oversized
+// canvas throwing here must not hang the whole clip. Runs on a blob: URL
+// of bytes we already fetched ourselves, so this never hits canvas
+// cross-origin tainting.
 function jcpDownscaleImage(blob) {
-  const MAX_DIM = 1600;
+  const MAX_WIDTH = 1600;
+  const MAX_HEIGHT = 30000;
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      const longest = Math.max(w, h);
-      if (!longest || longest <= MAX_DIM) {
+      try {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        const scale = Math.min(1, MAX_WIDTH / w, MAX_HEIGHT / h);
+        if (!w || !h || scale >= 1) {
+          URL.revokeObjectURL(url);
+          resolve(blob);
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((outBlob) => resolve(outBlob || blob), "image/jpeg", 0.85);
+      } catch (e) {
         URL.revokeObjectURL(url);
         resolve(blob);
-        return;
       }
-      const scale = MAX_DIM / longest;
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(w * scale));
-      canvas.height = Math.max(1, Math.round(h * scale));
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      canvas.toBlob((outBlob) => resolve(outBlob || blob), "image/jpeg", 0.85);
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -595,6 +607,14 @@ async function jcpWaitForRealSrc(liveEl, targetAbsUrl, timeoutMs) {
 // scroll position at actual capture time left a visible seam at the join. Zooming
 // the tab out until the whole image fits avoids that entirely, at the cost of
 // some resolution on very tall images.
+//
+// Returns an array of data URLs — length 1 for the common case (the zoomed-out
+// image fits in one shot), or several when even the minimum zoom isn't enough
+// (e.g. a single-file vertical webtoon page, sometimes 1:30+ aspect ratio) —
+// scrolling through it and capturing one segment per screen instead of just
+// the top slice and dropping the rest. Segments are placed as separate <img>
+// tags in reading order rather than stitched into one canvas, which sidesteps
+// the seam problem entirely (no stitching means no alignment to get wrong).
 async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   if (!liveImgEl) return null;
 
@@ -605,12 +625,13 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   const zoomRes = await chrome.runtime.sendMessage({ type: "getZoom" });
   const originalZoom = (zoomRes && zoomRes.zoom) || 1;
   let appliedZoom = originalZoom;
+  const MIN_ZOOM = 0.3;
 
   try {
     let rect = liveImgEl.getBoundingClientRect();
     const fitHeight = window.innerHeight * 0.92;
     if (rect.height > fitHeight) {
-      const targetZoom = Math.max(0.3, originalZoom * (fitHeight / rect.height));
+      const targetZoom = Math.max(MIN_ZOOM, originalZoom * (fitHeight / rect.height));
       await chrome.runtime.sendMessage({ type: "setZoom", factor: targetZoom });
       appliedZoom = targetZoom;
       await new Promise((r) => setTimeout(r, 350));
@@ -620,15 +641,39 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
     }
 
     const dpr = window.devicePixelRatio || 1;
-    const visTop = Math.max(0, rect.top);
-    const visBottom = Math.min(window.innerHeight, rect.bottom);
-    if (rect.width < 1 || visBottom - visTop < 1) return null;
 
-    const res = await chrome.runtime.sendMessage({
-      type: "captureImageRect",
-      rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
-    });
-    return res && res.ok ? res.dataUrl : null;
+    if (rect.height <= fitHeight) {
+      const visTop = Math.max(0, rect.top);
+      const visBottom = Math.min(window.innerHeight, rect.bottom);
+      if (rect.width < 1 || visBottom - visTop < 1) return null;
+      const res = await chrome.runtime.sendMessage({
+        type: "captureImageRect",
+        rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
+      });
+      return res && res.ok ? [res.dataUrl] : null;
+    }
+
+    // Still taller than one screen even at minimum zoom — scroll and capture
+    // in overlapping segments (5% overlap) so no sliver gets lost to rounding
+    // at the seam between two segments.
+    const MAX_SEGMENTS = 16;
+    const dataUrls = [];
+    for (let i = 0; i < MAX_SEGMENTS; i++) {
+      rect = liveImgEl.getBoundingClientRect();
+      if (rect.bottom <= 1 || rect.width < 1) break;
+      const visTop = Math.max(0, rect.top);
+      const visBottom = Math.min(window.innerHeight, rect.bottom);
+      if (visBottom - visTop < 1) break;
+      const res = await chrome.runtime.sendMessage({
+        type: "captureImageRect",
+        rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
+      });
+      if (res && res.ok) dataUrls.push(res.dataUrl);
+      if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
+      window.scrollBy(0, window.innerHeight * 0.95);
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return dataUrls.length ? dataUrls : null;
   } finally {
     if (appliedZoom !== originalZoom) {
       await chrome.runtime.sendMessage({ type: "setZoom", factor: originalZoom });
@@ -730,22 +775,36 @@ async function jcpInlineImages(root, baseUrl) {
   // can be taken at a time.
   let tabCaptures = 0;
   for (const r of results) {
-    let dataUrl = r.dataUrl;
-    if (!dataUrl && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
+    let dataUrls = r.dataUrl ? [r.dataUrl] : null;
+    if (!dataUrls && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
       try {
         const liveEl = jcpFindLiveImg(r.abs, baseUrl);
-        dataUrl = await jcpCaptureImageViaTab(liveEl, r.abs);
+        dataUrls = await jcpCaptureImageViaTab(liveEl, r.abs);
         tabCaptures++;
       } catch (e) {
         // Give up on this image; the original (likely broken) URL stays.
       }
     }
 
-    if (dataUrl) {
-      r.img.setAttribute("src", dataUrl);
+    if (dataUrls && dataUrls.length === 1) {
+      r.img.setAttribute("src", dataUrls[0]);
       r.img.removeAttribute("srcset");
       r.img.removeAttribute("data-original");
       r.img.removeAttribute("data-src");
+    } else if (dataUrls && dataUrls.length > 1) {
+      // A single-file image too tall for even a maximally zoomed-out
+      // screenshot (see jcpCaptureImageViaTab) came back as several scrolled
+      // segments — lay them out as separate <img> tags in reading order
+      // instead of forcing them into one image.
+      const width = r.img.getAttribute("width");
+      const frag = document.createDocumentFragment();
+      dataUrls.forEach((du) => {
+        const seg = document.createElement("img");
+        seg.setAttribute("src", du);
+        if (width) seg.setAttribute("width", width);
+        frag.appendChild(seg);
+      });
+      r.img.replaceWith(frag);
     }
   }
   return root;
