@@ -637,6 +637,16 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   await new Promise((r) => setTimeout(r, 150));
   if (targetAbsUrl) await jcpWaitForRealSrc(liveImgEl, targetAbsUrl, 4000);
 
+  // naturalWidth being set only means the file finished downloading and its
+  // dimensions are known — for an unusually large image (a single-file
+  // vertical webtoon page can be tens of thousands of pixels tall) the
+  // browser may still be progressively decoding/painting it, so a
+  // screenshot taken right after can catch a not-yet-fully-rendered frame
+  // for whatever's newly scrolled into view. img.decode() resolves only
+  // once the browser has the whole image fully decoded and ready to paint,
+  // which naturalWidth alone doesn't guarantee.
+  await liveImgEl.decode().catch(() => {});
+
   const zoomRes = await chrome.runtime.sendMessage({ type: "getZoom" });
   const originalZoom = (zoomRes && zoomRes.zoom) || 1;
   let appliedZoom = originalZoom;
