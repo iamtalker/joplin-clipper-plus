@@ -608,13 +608,22 @@ async function jcpWaitForRealSrc(liveEl, targetAbsUrl, timeoutMs) {
 // the tab out until the whole image fits avoids that entirely, at the cost of
 // some resolution on very tall images.
 //
-// Returns an array of data URLs — length 1 for the common case (the zoomed-out
-// image fits in one shot), or several when even the minimum zoom isn't enough
-// (e.g. a single-file vertical webtoon page, sometimes 1:30+ aspect ratio) —
-// scrolling through it and capturing one segment per screen instead of just
-// the top slice and dropping the rest. Segments are placed as separate <img>
-// tags in reading order rather than stitched into one canvas, which sidesteps
-// the seam problem entirely (no stitching means no alignment to get wrong).
+// Page zoom scales width and height together — zooming out enough to fit a
+// merely-tall image in one shot only costs a little resolution, but for a
+// single-file vertical webtoon page (aspect ratio 1:30+ isn't unusual) even
+// the minimum zoom can't make the whole thing fit in one screen, and forcing
+// it anyway would crush the WIDTH down along with the height for no benefit
+// (there was never going to be a single shot). So: only zoom out when that
+// actually gets the whole image into one screenshot; otherwise leave zoom
+// alone and fall through to capturing multiple scrolled segments at full
+// resolution instead.
+//
+// Returns an array of data URLs — length 1 for the common (zoomed, fits in
+// one shot) case, or several for an extremely tall image, each a same-width
+// slice captured at native resolution. Segments are placed as separate,
+// block-wrapped <img> tags in reading order rather than stitched into one
+// canvas, which sidesteps the seam problem entirely (no stitching means no
+// alignment to get wrong) — see jcpInlineImages.
 async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   if (!liveImgEl) return null;
 
@@ -630,15 +639,18 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   try {
     let rect = liveImgEl.getBoundingClientRect();
     const fitHeight = window.innerHeight * 0.92;
-    if (rect.height > fitHeight) {
-      const targetZoom = Math.max(MIN_ZOOM, originalZoom * (fitHeight / rect.height));
-      await chrome.runtime.sendMessage({ type: "setZoom", factor: targetZoom });
-      appliedZoom = targetZoom;
+    const zoomToFit = originalZoom * (fitHeight / rect.height);
+    if (rect.height > fitHeight && zoomToFit >= MIN_ZOOM) {
+      await chrome.runtime.sendMessage({ type: "setZoom", factor: zoomToFit });
+      appliedZoom = zoomToFit;
       await new Promise((r) => setTimeout(r, 350));
       liveImgEl.scrollIntoView({ block: "start", inline: "center" });
       await new Promise((r) => setTimeout(r, 150));
       rect = liveImgEl.getBoundingClientRect();
     }
+    // else: even the minimum zoom wouldn't have fit it in one shot, so don't
+    // zoom out at all — go straight to segmented capture below at whatever
+    // zoom the tab already had (usually 100%), keeping full width fidelity.
 
     const dpr = window.devicePixelRatio || 1;
 
@@ -653,10 +665,10 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       return res && res.ok ? [res.dataUrl] : null;
     }
 
-    // Still taller than one screen even at minimum zoom — scroll and capture
-    // in overlapping segments (5% overlap) so no sliver gets lost to rounding
-    // at the seam between two segments.
-    const MAX_SEGMENTS = 16;
+    // Still taller than one screen — scroll and capture in overlapping
+    // segments (5% overlap) so no sliver gets lost to rounding at the seam
+    // between two segments.
+    const MAX_SEGMENTS = 25;
     const dataUrls = [];
     for (let i = 0; i < MAX_SEGMENTS; i++) {
       rect = liveImgEl.getBoundingClientRect();
@@ -794,15 +806,18 @@ async function jcpInlineImages(root, baseUrl) {
     } else if (dataUrls && dataUrls.length > 1) {
       // A single-file image too tall for even a maximally zoomed-out
       // screenshot (see jcpCaptureImageViaTab) came back as several scrolled
-      // segments — lay them out as separate <img> tags in reading order
-      // instead of forcing them into one image.
-      const width = r.img.getAttribute("width");
+      // segments — lay them out in reading order (top to bottom) instead of
+      // forcing them into one image. Each <img> is wrapped in its own <div>:
+      // bare <img> tags are inline elements and would otherwise just flow
+      // left-to-right side by side (wrapping into rows) instead of stacking,
+      // which is meaningless for a vertical strip like this.
       const frag = document.createDocumentFragment();
       dataUrls.forEach((du) => {
+        const wrapperDiv = document.createElement("div");
         const seg = document.createElement("img");
         seg.setAttribute("src", du);
-        if (width) seg.setAttribute("width", width);
-        frag.appendChild(seg);
+        wrapperDiv.appendChild(seg);
+        frag.appendChild(wrapperDiv);
       });
       r.img.replaceWith(frag);
     }
