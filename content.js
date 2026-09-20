@@ -681,13 +681,13 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       return res && res.ok ? [res.dataUrl] : null;
     }
 
-    // Still taller than one screen — scroll and capture in segments. Scrolls
-    // by just under a full viewport (not a full 100%) purely as a rounding
-    // safety margin against losing a sub-pixel sliver at the seam — a
-    // bigger overlap (an earlier version used 5%) is easily wide enough to
-    // visibly repeat content (a whole line of dialogue, a character's face)
-    // between two consecutive segments, which reads as a real duplication
-    // bug rather than a deliberate seam guard.
+    // Still taller than one screen — scroll and capture in segments, one
+    // full viewport height per segment (no deliberate overlap — diagnostic
+    // logging elsewhere confirmed the scroll/rect math lands on exact,
+    // drift-free coordinates every time, so there's nothing to guard
+    // against here; an earlier version's overlap, meant only as a rounding
+    // margin, just left a visible seam of its own once the actual bug
+    // below was fixed).
     //
     // A ghosted/doubled-content bug was chased here for a long time
     // (scroll animation, overlap sizing, scroll drift during the capture
@@ -709,7 +709,7 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       });
       if (res && res.ok) dataUrls.push(res.dataUrl);
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
-      window.scrollBy({ top: window.innerHeight - 2, left: 0, behavior: "instant" });
+      window.scrollBy({ top: window.innerHeight, left: 0, behavior: "instant" });
       await new Promise((r) => setTimeout(r, 200));
     }
     return dataUrls.length ? dataUrls : null;
