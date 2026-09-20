@@ -601,107 +601,41 @@ async function jcpWaitForRealSrc(liveEl, targetAbsUrl, timeoutMs) {
 // live page — a screen capture is plain pixel data, so it isn't subject to the
 // CORS check that blocks fetch() at all.
 //
-// Images taller than one viewport can't fit in a single screenshot. An earlier
-// version captured several scrolled segments and stitched them into one canvas,
-// but any sub-pixel drift between the scroll position we measured and the
-// scroll position at actual capture time left a visible seam at the join. Zooming
-// the tab out until the whole image fits avoids that entirely, at the cost of
-// some resolution on very tall images.
-//
-// Page zoom scales width and height together — zooming out enough to fit a
-// merely-tall image in one shot only costs a little resolution, but for a
-// single-file vertical webtoon page (aspect ratio 1:30+ isn't unusual) even
-// the minimum zoom can't make the whole thing fit in one screen, and forcing
-// it anyway would crush the WIDTH down along with the height for no benefit
-// (there was never going to be a single shot). So: only zoom out when that
-// actually gets the whole image into one screenshot; otherwise leave zoom
-// alone and fall through to capturing multiple scrolled segments at full
-// resolution instead.
-//
-// Returns an array of data URLs — length 1 for the common (zoomed, fits in
-// one shot) case, or several for an extremely tall image, each a same-width
-// slice captured at native resolution. Segments are placed as separate,
-// block-wrapped <img> tags in reading order rather than stitched into one
-// canvas, which sidesteps the seam problem entirely (no stitching means no
-// alignment to get wrong) — see jcpInlineImages.
+// Captured via the Chrome DevTools Protocol (see background.js's
+// captureElementViaCDP), which can render an arbitrary page-relative
+// rectangle in one call via captureBeyondViewport — no scrolling needed even
+// for a single-file image many screens tall (a vertical webtoon page, say).
+// An earlier version used chrome.tabs.captureVisibleTab instead, which can
+// only capture whatever's currently on screen; that meant zooming out (or,
+// for extreme aspect ratios, scrolling through several segments) to get a
+// tall image's full content, and went through several rounds of scroll-
+// timing bugs — a screenshot taken before the browser had actually finished
+// repainting after a scroll could capture a blended frame, part of the
+// previous scroll position and part of the new one overlaid together. CDP's
+// clip rectangle sidesteps all of that: no scrolling, no zoom change, no
+// timing window to race.
 async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
   if (!liveImgEl) return null;
 
-  // Forced to "instant": a page with CSS `scroll-behavior: smooth` (common)
-  // would otherwise animate every scroll here over several hundred ms, and
-  // a screenshot taken before that animation finishes captures a half-
-  // scrolled, blended frame — the previous segment's tail end and the next
-  // segment's start overlaid on top of each other. That looked like (and
-  // was reported as) duplicated/overlapping content, not a timing bug.
-  liveImgEl.scrollIntoView({ block: "start", inline: "center", behavior: "instant" });
-  await new Promise((r) => setTimeout(r, 150));
   if (targetAbsUrl) await jcpWaitForRealSrc(liveImgEl, targetAbsUrl, 4000);
 
-  const zoomRes = await chrome.runtime.sendMessage({ type: "getZoom" });
-  const originalZoom = (zoomRes && zoomRes.zoom) || 1;
-  let appliedZoom = originalZoom;
-  const MIN_ZOOM = 0.3;
+  const rect = liveImgEl.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return null;
 
-  try {
-    let rect = liveImgEl.getBoundingClientRect();
-    const fitHeight = window.innerHeight * 0.92;
-    const zoomToFit = originalZoom * (fitHeight / rect.height);
-    if (rect.height > fitHeight && zoomToFit >= MIN_ZOOM) {
-      await chrome.runtime.sendMessage({ type: "setZoom", factor: zoomToFit });
-      appliedZoom = zoomToFit;
-      await new Promise((r) => setTimeout(r, 350));
-      liveImgEl.scrollIntoView({ block: "start", inline: "center", behavior: "instant" });
-      await new Promise((r) => setTimeout(r, 150));
-      rect = liveImgEl.getBoundingClientRect();
-    }
-    // else: even the minimum zoom wouldn't have fit it in one shot, so don't
-    // zoom out at all — go straight to segmented capture below at whatever
-    // zoom the tab already had (usually 100%), keeping full width fidelity.
-
-    const dpr = window.devicePixelRatio || 1;
-
-    if (rect.height <= fitHeight) {
-      const visTop = Math.max(0, rect.top);
-      const visBottom = Math.min(window.innerHeight, rect.bottom);
-      if (rect.width < 1 || visBottom - visTop < 1) return null;
-      const res = await chrome.runtime.sendMessage({
-        type: "captureImageRect",
-        rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
-      });
-      return res && res.ok ? [res.dataUrl] : null;
-    }
-
-    // Still taller than one screen — scroll and capture in segments. Scrolls
-    // by just under a full viewport (not a full 100%) purely as a rounding
-    // safety margin against losing a sub-pixel sliver at the seam — a
-    // bigger overlap (an earlier version used 5%) is easily wide enough to
-    // visibly repeat content (a whole line of dialogue, a character's face)
-    // between two consecutive segments, which reads as a real duplication
-    // bug rather than a deliberate seam guard.
-    const MAX_SEGMENTS = 25;
-    const dataUrls = [];
-    for (let i = 0; i < MAX_SEGMENTS; i++) {
-      rect = liveImgEl.getBoundingClientRect();
-      if (rect.bottom <= 1 || rect.width < 1) break;
-      const visTop = Math.max(0, rect.top);
-      const visBottom = Math.min(window.innerHeight, rect.bottom);
-      if (visBottom - visTop < 1) break;
-      const res = await chrome.runtime.sendMessage({
-        type: "captureImageRect",
-        rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
-      });
-      if (res && res.ok) dataUrls.push(res.dataUrl);
-      if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
-      window.scrollBy({ top: window.innerHeight - 2, left: 0, behavior: "instant" });
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    return dataUrls.length ? dataUrls : null;
-  } finally {
-    if (appliedZoom !== originalZoom) {
-      await chrome.runtime.sendMessage({ type: "setZoom", factor: originalZoom });
-      await new Promise((r) => setTimeout(r, 150));
-    }
-  }
+  // clip coordinates are page-relative (CDP renders beyond the current
+  // scroll position), so add the current scroll offset to the viewport-
+  // relative rect from getBoundingClientRect().
+  const res = await chrome.runtime.sendMessage({
+    type: "captureElementCDP",
+    rect: {
+      x: rect.left + window.scrollX,
+      y: rect.top + window.scrollY,
+      width: rect.width,
+      height: rect.height,
+      dpr: window.devicePixelRatio || 1,
+    },
+  });
+  return res && res.ok ? res.dataUrl : null;
 }
 
 function jcpFindLiveImg(absSrc, baseUrl) {
@@ -792,44 +726,27 @@ async function jcpInlineImages(root, baseUrl) {
     })
   );
 
-  // Phase 2: anything fetch() couldn't get falls back to tab-capture — this
-  // MUST stay sequential, since it scrolls the page and only one screenshot
-  // can be taken at a time.
+  // Phase 2: anything fetch() couldn't get falls back to tab-capture (see
+  // jcpCaptureImageViaTab) — kept sequential since each one attaches/detaches
+  // the debugger on the tab, which isn't meant to run concurrently.
   let tabCaptures = 0;
   for (const r of results) {
-    let dataUrls = r.dataUrl ? [r.dataUrl] : null;
-    if (!dataUrls && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
+    let dataUrl = r.dataUrl;
+    if (!dataUrl && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
       try {
         const liveEl = jcpFindLiveImg(r.abs, baseUrl);
-        dataUrls = await jcpCaptureImageViaTab(liveEl, r.abs);
+        dataUrl = await jcpCaptureImageViaTab(liveEl, r.abs);
         tabCaptures++;
       } catch (e) {
         // Give up on this image; the original (likely broken) URL stays.
       }
     }
 
-    if (dataUrls && dataUrls.length === 1) {
-      r.img.setAttribute("src", dataUrls[0]);
+    if (dataUrl) {
+      r.img.setAttribute("src", dataUrl);
       r.img.removeAttribute("srcset");
       r.img.removeAttribute("data-original");
       r.img.removeAttribute("data-src");
-    } else if (dataUrls && dataUrls.length > 1) {
-      // A single-file image too tall for even a maximally zoomed-out
-      // screenshot (see jcpCaptureImageViaTab) came back as several scrolled
-      // segments — lay them out in reading order (top to bottom) instead of
-      // forcing them into one image. Each <img> is wrapped in its own <div>:
-      // bare <img> tags are inline elements and would otherwise just flow
-      // left-to-right side by side (wrapping into rows) instead of stacking,
-      // which is meaningless for a vertical strip like this.
-      const frag = document.createDocumentFragment();
-      dataUrls.forEach((du) => {
-        const wrapperDiv = document.createElement("div");
-        const seg = document.createElement("img");
-        seg.setAttribute("src", du);
-        wrapperDiv.appendChild(seg);
-        frag.appendChild(wrapperDiv);
-      });
-      r.img.replaceWith(frag);
     }
   }
   return root;

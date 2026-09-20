@@ -53,71 +53,67 @@ async function listFolders() {
   return all;
 }
 
-async function arrayBufferToBase64(buf) {
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
+function cdpSendCommand(target, method, params) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand(target, method, params || {}, (result) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(result);
+    });
+  });
 }
 
-// chrome.tabs.captureVisibleTab enforces its own quota (Chrome allows at
-// most ~2 calls/second per profile) — a post with several images in a row
-// that all need the screenshot fallback (see SCREENSHOT_FALLBACK_HOSTS in
-// content.js) can fire captures faster than that. When the quota is hit the
-// call just throws, which the caller in content.js catches and silently
-// gives up on that one image — the site's original (CORS-blocked, so
-// unloadable once clipped) URL is left in place, which is what actually
-// looked like "some images go missing" from a multi-image post. Throttle
-// every call to at least MIN_CAPTURE_INTERVAL_MS apart, and retry once if
-// the quota error slips through anyway (e.g. another tab captured around
-// the same time).
-const MIN_CAPTURE_INTERVAL_MS = 550;
-let lastCaptureAt = 0;
-
-async function throttleCapture() {
-  const wait = lastCaptureAt + MIN_CAPTURE_INTERVAL_MS - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastCaptureAt = Date.now();
+function cdpAttach(target) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach(target, "1.3", () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
 }
 
-async function captureVisibleTabThrottled(windowId) {
-  await throttleCapture();
+function cdpDetach(target) {
+  return new Promise((resolve) => {
+    chrome.debugger.detach(target, () => resolve());
+  });
+}
+
+// Fallback for images fetch() can't read due to CORS (see content.js).
+// Screenshots the given page-relative rectangle directly via the Chrome
+// DevTools Protocol's Page.captureScreenshot, with captureBeyondViewport —
+// this renders the requested area in one call regardless of how tall it is
+// or whether it's currently scrolled into view at all, which is how "full
+// page screenshot" extensions avoid needing to scroll+stitch in the first
+// place. Replaced an earlier chrome.tabs.captureVisibleTab-based approach
+// (screenshot only the visible viewport, scroll and repeat for anything
+// taller) that went through several rounds of scroll-timing bugs — a
+// screenshot taken before the browser had actually finished repainting
+// after a scroll could capture a blended frame, showing part of the
+// previous scroll position and part of the new one overlaid together.
+//
+// Requires the "debugger" permission: Chrome shows its own "<extension>
+// started debugging this browser" banner while attached (expected, every
+// extension using this API gets it), and attach fails if DevTools is
+// already open on that same tab (only one debugger client per target).
+async function captureElementViaCDP(tabId, cssRect) {
+  const target = { tabId };
+  await cdpAttach(target);
   try {
-    return await chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 90 });
-  } catch (e) {
-    if (!/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/.test(e.message || "")) throw e;
-    await new Promise((r) => setTimeout(r, MIN_CAPTURE_INTERVAL_MS));
-    lastCaptureAt = Date.now();
-    return chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 90 });
+    const result = await cdpSendCommand(target, "Page.captureScreenshot", {
+      format: "jpeg",
+      quality: 90,
+      clip: {
+        x: cssRect.x,
+        y: cssRect.y,
+        width: cssRect.width,
+        height: cssRect.height,
+        scale: cssRect.dpr || 1,
+      },
+      captureBeyondViewport: true,
+    });
+    return `data:image/jpeg;base64,${result.data}`;
+  } finally {
+    await cdpDetach(target);
   }
-}
-
-// Fallback for images fetch() can't read due to CORS (see content.js). We
-// screenshot the whole visible tab, then crop to just the image's rect in an
-// OffscreenCanvas — screenshot pixels aren't subject to the CORS check.
-// Captured/output as JPEG rather than PNG: a very tall image can mean
-// dozens of these in one clip (see jcpCaptureImageViaTab's segmented
-// capture), and PNG's slower encode + much bigger base64 payload was a real
-// contributor to clips timing out on those.
-async function captureImageRect(tabId, rect) {
-  const tab = await chrome.tabs.get(tabId);
-  const shotDataUrl = await captureVisibleTabThrottled(tab.windowId);
-  const shotBlob = await (await fetch(shotDataUrl)).blob();
-  const bitmap = await createImageBitmap(shotBlob);
-  const dpr = rect.dpr || 1;
-  const sx = Math.max(0, Math.round(rect.x * dpr));
-  const sy = Math.max(0, Math.round(rect.y * dpr));
-  const sw = Math.max(1, Math.min(bitmap.width - sx, Math.round(rect.width * dpr)));
-  const sh = Math.max(1, Math.min(bitmap.height - sy, Math.round(rect.height * dpr)));
-  const canvas = new OffscreenCanvas(sw, sh);
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
-  const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
-  const base64 = await arrayBufferToBase64(await outBlob.arrayBuffer());
-  return `data:image/jpeg;base64,${base64}`;
 }
 
 // Safety net for the whole clip operation: content.js has its own per-image
@@ -182,8 +178,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         const clip = await withTimeout(
           runClipOnTab(tab.id, msg.mode),
-          120000,
-          "클리핑이 2분 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
+          60000,
+          "클리핑이 60초 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
         );
         if (clip.error) {
           sendResponse({ ok: false, error: clip.error });
@@ -196,15 +192,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           titleOverride: msg.title,
         });
         sendResponse({ ok: true, note, preview: clip });
-      } else if (msg.type === "captureImageRect") {
-        const dataUrl = await captureImageRect(sender.tab.id, msg.rect);
+      } else if (msg.type === "captureElementCDP") {
+        const dataUrl = await captureElementViaCDP(sender.tab.id, msg.rect);
         sendResponse({ ok: true, dataUrl });
-      } else if (msg.type === "getZoom") {
-        const zoom = await chrome.tabs.getZoom(sender.tab.id);
-        sendResponse({ ok: true, zoom });
-      } else if (msg.type === "setZoom") {
-        await chrome.tabs.setZoom(sender.tab.id, msg.factor);
-        sendResponse({ ok: true });
       } else if (msg.type === "preview") {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         const clip = await runClipOnTab(tab.id, msg.mode);
