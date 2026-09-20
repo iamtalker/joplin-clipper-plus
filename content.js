@@ -716,7 +716,14 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
       if (res && res.ok) dataUrls.push(res.dataUrl);
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
       window.scrollBy({ top: window.innerHeight - 2, left: 0, behavior: "instant" });
-      await new Promise((r) => setTimeout(r, 200));
+      // TEST (per external suggestion, unverified): force a synchronous
+      // reflow, then wait two consecutive animation frames instead of a
+      // fixed setTimeout, on the theory that a fixed delay doesn't actually
+      // guarantee the browser has painted the newly-scrolled-in region
+      // before the next capture fires. Known-unresolved bug this targets:
+      // see the "KNOWN ISSUE" comment above.
+      document.body.offsetHeight; // eslint-disable-line no-unused-expressions
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     }
     return dataUrls.length ? dataUrls : null;
   } finally {
