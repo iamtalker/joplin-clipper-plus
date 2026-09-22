@@ -1040,6 +1040,14 @@ async function jcpClipSelection() {
   for (let i = 0; i < sel.rangeCount; i++) {
     container.appendChild(sel.getRangeAt(i).cloneContents());
   }
+  // The selected content is already fully copied into `container` above, so
+  // it's safe to clear the live page's selection now. If an image inside it
+  // needs the CORS tab-screenshot fallback below, that screenshots whatever
+  // is currently rendered on screen — and a still-active mouse selection
+  // renders selected images with the browser's own dimmed/grayscale
+  // selection-highlight overlay, which got baked into the screenshot as if
+  // the image itself were black-and-white.
+  sel.removeAllRanges();
   jcpAbsolutize(container, location.href);
   jcpStripNonContentTags(container);
   const videoIds = jcpExtractVideoPlaceholders(container);
