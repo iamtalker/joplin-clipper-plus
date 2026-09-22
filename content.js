@@ -69,6 +69,16 @@ const SITE_CONTENT_SELECTORS = {
   // density scoring loses to the comment thread / related-post sidebar —
   // Readability was grabbing unrelated content instead of the actual post.
   "bbs.ruliweb.com": "h4.subject, .view_content.autolink",
+  // SvelteKit site — CSS classes are build-hashed (svelte-xxxxxxx suffixes)
+  // and even the un-hashed classes (Tailwind utility classes) aren't
+  // distinctive enough to target just the post: the same "card" utility
+  // classes are shared by the comments container too. Readability was
+  // pulling in the 46-comment thread and the top nav category menu
+  // alongside the actual post. h1 (page has exactly one) plus
+  // #economy-post-content (a stable id despite the odd name — reused
+  // across all board types, not just the "economy" board) together are
+  // exactly the title and body, nothing else.
+  "damoang.net": "h1, #economy-post-content",
   // Readability was grabbing the 13000+ char comment thread (.read_bottom)
   // and/or the Naver ad slot (.powerAD) alongside — both are siblings of the
   // actual post body (#articleBody) inside the same #column2 container, not
