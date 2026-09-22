@@ -2,6 +2,8 @@
 
 Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 조플린용 웹 클리퍼 크롬 확장(Manifest V3)입니다.
 
+**크롬 웹 스토어**: https://chromewebstore.google.com/detail/joplin-clipper-plus/fbieoidncnoalmenkkpbcbomppoenfoa
+
 ## 기능
 - 📄 **Article** — Readability로 본문만 추출해 마크다운으로 저장 (광고/사이드바 제거)
 - 🖼 **Full Page** — 스크립트를 제거한 전체 페이지 HTML 스냅샷 저장
@@ -19,11 +21,13 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 3. "Web Clipper 서비스 활성화" 켜기
 4. 표시되는 **Authorization token**을 복사
 
-### 2. 확장 프로그램 로드
-1. Chrome/Edge 주소창에 `chrome://extensions` (Edge는 `edge://extensions`) 입력
-2. 우측 상단 "개발자 모드" 켜기
-3. "압축해제된 확장 프로그램을 로드합니다" 클릭
-4. 이 폴더(`joplin-clipper`)를 선택
+### 2. 확장 프로그램 설치
+- **크롬 웹 스토어에서 설치 (권장)**: [Joplin Clipper Plus](https://chromewebstore.google.com/detail/joplin-clipper-plus/fbieoidncnoalmenkkpbcbomppoenfoa) 페이지에서 "Chrome에 추가"
+- **직접 빌드해서 설치 (개발용)**:
+  1. Chrome/Edge 주소창에 `chrome://extensions` (Edge는 `edge://extensions`) 입력
+  2. 우측 상단 "개발자 모드" 켜기
+  3. "압축해제된 확장 프로그램을 로드합니다" 클릭
+  4. 이 폴더(`joplin-clipper`)를 선택
 
 ### 3. 토큰 등록
 1. 확장 아이콘 클릭 → 팝업 상단의 "settings" 클릭 (또는 확장 관리 화면에서 "세부정보 → 확장 프로그램 옵션")
