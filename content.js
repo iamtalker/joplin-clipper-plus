@@ -415,50 +415,58 @@ function jcpStripWikiAttributionNotice(root) {
   return root;
 }
 
-// Embedded <iframe> players (YouTube, etc.) have no Markdown representation
-// and Turndown just drops them. Joplin's renderer will auto-embed a YouTube
-// video, but ONLY if the URL sits completely alone on its own line — wrapping
-// it in a [text](url) link, or leaving other text on the line, disables the
-// auto-embed. So each matching iframe is swapped for a plain-text placeholder
-// paragraph pre-conversion, then patched to the bare URL post-conversion —
-// going through a placeholder avoids Turndown's text-escaping (it backslash-
-// escapes underscores etc., which would corrupt a video ID written directly).
-function jcpYoutubeIdFromEmbedUrl(src) {
+// Embedded <iframe> players/widgets (YouTube, Twitter/X, etc.) have no
+// Markdown representation and Turndown just drops them silently. Joplin's
+// renderer will auto-embed a YouTube video, but ONLY if the URL sits
+// completely alone on its own line — wrapping it in a [text](url) link, or
+// leaving other text on the line, disables the auto-embed. So each matching
+// iframe is swapped for a plain-text placeholder paragraph pre-conversion,
+// then patched to the bare URL post-conversion — going through a
+// placeholder avoids Turndown's text-escaping (it backslash-escapes
+// underscores etc., which would corrupt a video/tweet ID written directly).
+// Non-YouTube embeds (Twitter/X confirmed so far — damoang.net posts embed
+// tweets as <iframe src="https://platform.twitter.com/embed/Tweet.html?id=...">)
+// may not auto-embed in Joplin the way YouTube does, but turning them into a
+// plain clickable link beats silently losing the embedded content entirely.
+function jcpCanonicalEmbedUrl(src) {
   try {
     const u = new URL(src, location.href);
     const host = u.hostname.replace(/^www\./, "");
     if (host === "youtube.com" || host === "youtube-nocookie.com") {
       const m = u.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
+      if (m) return `https://www.youtube.com/watch?v=${m[1]}`;
     }
     if (host === "youtu.be") {
       const m = u.pathname.match(/^\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
+      if (m) return `https://www.youtube.com/watch?v=${m[1]}`;
+    }
+    // /i/status/<id> resolves without needing the tweet author's handle,
+    // which the embed widget URL doesn't carry.
+    if (host === "platform.twitter.com" && u.pathname === "/embed/Tweet.html") {
+      const id = u.searchParams.get("id");
+      if (id) return `https://twitter.com/i/status/${id}`;
     }
   } catch (e) {}
   return null;
 }
 
 function jcpExtractVideoPlaceholders(root) {
-  const ids = [];
+  const urls = [];
   root.querySelectorAll("iframe[src]").forEach((iframe) => {
-    const id = jcpYoutubeIdFromEmbedUrl(iframe.getAttribute("src"));
-    if (!id) return;
-    const idx = ids.push(id) - 1;
+    const url = jcpCanonicalEmbedUrl(iframe.getAttribute("src"));
+    if (!url) return;
+    const idx = urls.push(url) - 1;
     const p = document.createElement("p");
     p.textContent = `JCPVIDEOPLACEHOLDERx${idx}xENDPLACEHOLDER`;
     iframe.replaceWith(p);
   });
-  return ids;
+  return urls;
 }
 
-function jcpApplyVideoPlaceholders(markdown, ids) {
+function jcpApplyVideoPlaceholders(markdown, urls) {
   let result = markdown;
-  ids.forEach((id, idx) => {
-    result = result.replace(
-      `JCPVIDEOPLACEHOLDERx${idx}xENDPLACEHOLDER`,
-      `https://www.youtube.com/watch?v=${id}`
-    );
+  urls.forEach((url, idx) => {
+    result = result.replace(`JCPVIDEOPLACEHOLDERx${idx}xENDPLACEHOLDER`, url);
   });
   return result;
 }
