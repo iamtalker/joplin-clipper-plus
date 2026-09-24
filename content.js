@@ -79,6 +79,11 @@ const SITE_CONTENT_SELECTORS = {
   // across all board types, not just the "economy" board) together are
   // exactly the title and body, nothing else.
   "damoang.net": "h1, #economy-post-content",
+  // XpressEngine-style board. Posts here are often image-only (no body
+  // text at all), so Readability's text-density scoring picked the comment
+  // thread (.fdb_lst_wrp, thousands of chars of repeated non-member
+  // placeholder text) as the "article" instead of the actual post.
+  "theqoo.net": ".rd_hd .title, .rd_body",
   // Readability was grabbing the 13000+ char comment thread (.read_bottom)
   // and/or the Naver ad slot (.powerAD) alongside — both are siblings of the
   // actual post body (#articleBody) inside the same #column2 container, not
@@ -284,6 +289,7 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
   "web.humoruniv.com",
   "www.slrclub.com",
   "www.inven.co.kr",
+  "theqoo.net",
 ]);
 
 // script/style/template content has no Markdown representation, but Turndown
