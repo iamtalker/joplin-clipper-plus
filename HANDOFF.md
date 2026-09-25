@@ -1,10 +1,10 @@
 # HANDOFF — 다음 세션에서 이어서 하기 위한 인계 문서
 
-마지막 갱신: 2026-09-25 / 현재 버전: **v0.36.1** (GitHub 태그 푸시 완료) / 작업 폴더: `C:\claude program\joplin-clipper`
+마지막 갱신: 2026-09-25 / 현재 버전: **v0.37.0** (GitHub 태그 푸시 완료) / 작업 폴더: `C:\claude program\joplin-clipper`
 
 ## ★ 옵시디언 포크 (2026-09-25~)
 - 옵시디언용 포크 **Obsidian Clipper Plus**: 레포 `iamtalker/obsidian-clipper-plus`, 로컬 `C:\claude program\obsidian-clipper-plus`. 사용자 볼트: `C:\MyData\Obsidian Scrapbook`(Local REST API with MCP 플러그인, HTTP 27123).
-- 공통 파일(`content.js`, `core.js`, `toolbar.js`, `popup.js`, `lib/`)은 **이 레포에서만 수정** → `bash scripts/sync-to-obsidian.sh`로 복사. 버전업할 때마다 **두 레포 모두 같은 버전**으로 올림(각 README 변경 이력 + 태그 + 푸시).
+- 공통 파일(`content.js`, `core.js`, `toolbar.js`, `popup.js`, `lib/`)은 **이 레포에서만 수정** → `bash scripts/sync-to-obsidian.sh`로 복사. 버전은 **바뀐 쪽만** 올림: 공통 파일이 바뀌면 두 레포 모두, 한쪽 전용 파일만 바뀌면 그쪽만(각 README 변경 이력 + 태그 + 푸시). 두 레포 버전 번호는 달라도 됨(사용자 방침, 2026-09-25).
 - 자세한 구조는 메모리 `project_obsidian_clipper.md`.
 
 ## 0. 먼저 읽을 것

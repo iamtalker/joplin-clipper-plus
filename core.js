@@ -264,7 +264,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // Extension contexts (unlike content scripts under MV3) get CORS
         // bypass for hosts covered by host_permissions, so this can pull
         // the original file from CDNs that block fetch() from the page.
-        const res = await fetch(msg.url, { credentials: "include" });
+        // A post's images are all requested at once, which some image hosts
+        // (arca.live) answer with 429 Too Many Requests — wait and retry.
+        let res;
+        for (let attempt = 0; ; attempt++) {
+          res = await fetch(msg.url, { credentials: "include" });
+          if (res.status !== 429 || attempt >= 3) break;
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1) + Math.random() * 500));
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status} fetching image`);
         const blob = await res.blob();
         if (!blob.size) throw new Error("empty image response");

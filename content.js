@@ -90,6 +90,11 @@ const SITE_CONTENT_SELECTORS = {
   // wrapped in anything that separates them, so Readability's density
   // scoring had no reason to prefer just the post.
   "www.82cook.com": "h4.title.bbstitle, #readHead, #articleBody",
+  // Daum news: Readability took the whole page — the summary / text-to-speech
+  // / translation / font-size tool panels, the ranking lists and the site
+  // footer menus. Title, reporter+date and the article body each have
+  // their own element.
+  "v.daum.net": "h3.tit_view, .info_view, .article_view",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -243,6 +248,9 @@ const SITE_CLEANUP_SELECTORS = {
     "[id^='sch_alliance_box']",
     ".adsbygoogle",
     "ins.adsbygoogle",
+    // 12x11 gallery-nickname badge next to the author name — got saved as
+    // its own image file on every clip.
+    ".writer_nikcon img",
   ],
   // Custom video-player chrome (speed/volume controls, progress bar) that
   // sits as sibling divs next to a self-hosted <video> — see jcpCleanVideoTags.
@@ -297,8 +305,13 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
 // its text. Sites that keep inline <script> blocks inside the post body (image
 // numbering widgets, ad loaders, etc. — DCinside does this) leak raw JS into
 // the clip unless we strip these out before conversion.
+// Google AdSense slots (<ins class="adsbygoogle">) are never content either;
+// theqoo's sits inside the post body and its "related searches" ad text
+// ("개인정보 보호", "연예 잡지 구독", ...) ended up at the end of the clip.
 function jcpStripNonContentTags(root) {
-  root.querySelectorAll("script, style, noscript, template, link[rel='stylesheet']").forEach((el) => el.remove());
+  root
+    .querySelectorAll("script, style, noscript, template, link[rel='stylesheet'], ins.adsbygoogle")
+    .forEach((el) => el.remove());
   return root;
 }
 
@@ -812,21 +825,48 @@ async function jcpInlineImages(root, baseUrl) {
       // warning for nothing.
       const isMixedContent = location.protocol === "https:" && abs.startsWith("http://");
 
+      const toDataUrl = async (blob) => {
+        if (!blob.size) return null;
+        blob = await jcpDownscaleImage(blob);
+        return blob.size <= MAX_BYTES ? jcpBlobToDataUrl(blob) : null;
+      };
+
       let dataUrl = null;
       if (!isMixedContent) {
-        try {
-          const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 12000);
-          if (res.ok) {
-            let blob = await res.blob();
-            if (blob.size > 0) {
-              blob = await jcpDownscaleImage(blob);
-              if (blob.size <= MAX_BYTES) {
-                dataUrl = await jcpBlobToDataUrl(blob);
-              }
-            }
+        // CDNs answering "Access-Control-Allow-Origin: *" (e.g. Daum's
+        // daumcdn.net) reject any request that carries cookies — the browser
+        // fails the credentialed fetch outright even though the very same
+        // request without cookies is allowed. So retry once without them.
+        for (const credentials of ["include", "omit"]) {
+          try {
+            const res = await jcpFetchWithTimeout(abs, { credentials }, 12000);
+            if (res.ok) dataUrl = await toDataUrl(await res.blob());
+            break;
+          } catch (e) {
+            // Likely CORS-blocked; try the next option.
           }
-        } catch (e) {
-          // Likely CORS-blocked; fall through to the tab-capture fallback below.
+        }
+      }
+      // Still nothing: let the extension's background fetch it (CORS doesn't
+      // apply there). Not on SCREENSHOT_FALLBACK_HOSTS — those sites were set
+      // up to use tab capture in phase 2, keep them exactly as they were.
+      // If a high-quality original (data-originalurl etc.) can't be had,
+      // the plain src the page is actually showing still beats a remote link.
+      if (!dataUrl && !SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
+        const urls = [abs];
+        try {
+          const plain = img.getAttribute("src");
+          const plainAbs = plain && !plain.startsWith("data:") ? new URL(plain, baseUrl).href : "";
+          if (plainAbs && plainAbs !== abs) urls.push(plainAbs);
+        } catch (e) {}
+        for (const url of urls) {
+          try {
+            const res = await chrome.runtime.sendMessage({ type: "fetchImageBytes", url });
+            if (res && res.ok) dataUrl = await toDataUrl(await (await fetch(res.dataUrl)).blob());
+          } catch (e) {
+            // Try the next URL; if none works the original URL stays.
+          }
+          if (dataUrl) break;
         }
       }
       return { img, abs, dataUrl };
