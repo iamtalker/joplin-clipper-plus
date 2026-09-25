@@ -1072,102 +1072,135 @@ async function jcpClipSelection() {
 
 // Dedicated mode for scroll-style webtoon pages, kept separate from Article
 // mode so tall-image experimentation can't destabilize normal clipping.
-// Picks the page's tallest <img> automatically (by rendered height, falling
-// back to natural height for images that haven't laid out yet) and saves
-// just that image, titled with the page title. The image bytes are fetched
-// directly when the site allows it (best quality, no permission needed);
-// otherwise the rendered image region is captured through the DevTools
-// Protocol (see captureRegionViaCDP in background.js) — no scrolling, no
-// segments, so no seams. If that fails the real error is returned to the
-// popup verbatim rather than silently falling back to something else.
-async function jcpClipWebtoon() {
-  let best = null;
-  let bestH = 0;
-  document.querySelectorAll("img").forEach((img) => {
-    const r = img.getBoundingClientRect();
-    if (r.width < 100 && (img.naturalWidth || 0) < 100) return;
-    const h = Math.max(r.height, img.naturalHeight || 0);
-    if (h > bestH) {
-      best = img;
-      bestH = h;
-    }
-  });
-  if (!best) return { error: "No image found on this page." };
-
+// Saves every big image of the post, in page order (a webtoon is often
+// split across several image files — the first version only took the
+// single tallest one and the story just stopped where that file ended).
+// Each image is obtained the best way available: the original file via
+// page fetch, else via the background service worker (which isn't bound by
+// the page's CORS given host permission), and only as a last resort a CDP
+// screenshot of the rendered region (see captureRegionViaCDP in
+// background.js). Failures return the real error to the popup verbatim.
+async function jcpWebtoonImageDataUrl(img) {
   let abs;
   try {
-    abs = new URL(jcpRealImgUrl(best), location.href).href;
+    abs = new URL(jcpRealImgUrl(img), location.href).href;
   } catch (e) {
     return { error: "Could not resolve the image URL." };
   }
 
-  let dataUrl = null;
-  let via = null;
   try {
     const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 15000);
     if (res.ok) {
       const blob = await res.blob();
-      if (blob.size > 0) {
-        dataUrl = await jcpBlobToDataUrl(blob);
-        via = `page fetch, original file ${blob.size} bytes`;
-      }
+      if (blob.size > 0) return { dataUrl: await jcpBlobToDataUrl(blob), via: "page" };
     }
   } catch (e) {
     // CORS-blocked or unreachable — try the background fetch next.
   }
 
-  // Under MV3 a content script's fetch obeys the page's CORS, but the
-  // background service worker doesn't (given host permission), so it can
-  // usually still pull the ORIGINAL file — perfect quality, no screenshot,
-  // no seams. Screenshotting is only the last resort below.
-  if (!dataUrl) {
-    try {
-      const res = await chrome.runtime.sendMessage({ type: "fetchImageBytes", url: abs });
-      if (res && res.ok) {
-        dataUrl = res.dataUrl;
-        via = `background fetch, original file ${res.size} bytes`;
-      }
-    } catch (e) {
-      // fall through to CDP
-    }
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "fetchImageBytes", url: abs });
+    if (res && res.ok) return { dataUrl: res.dataUrl, via: "background" };
+  } catch (e) {
+    // fall through to CDP
   }
 
-  if (!dataUrl) {
-    best.scrollIntoView({ block: "start", behavior: "instant" });
-    await new Promise((r) => setTimeout(r, 200));
-    // decode() on a huge image can take a while (or never settle) — don't
-    // let that alone hang the whole clip.
-    await Promise.race([best.decode().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
-    const rect = best.getBoundingClientRect();
-    let res;
-    try {
-      res = await Promise.race([
-        chrome.runtime.sendMessage({
-          type: "captureRegionCDP",
-          rect: {
-            x: rect.left + window.scrollX,
-            y: rect.top + window.scrollY,
-            width: rect.width,
-            height: rect.height,
-            scale: window.devicePixelRatio || 1,
-          },
-        }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("background never responded within 100s")), 100000)),
-      ]);
-    } catch (e) {
-      return { error: "CDP capture failed (content side): " + e.message };
-    }
-    if (!res || !res.ok) {
-      return { error: "CDP capture failed: " + ((res && res.error) || "no response from background") };
-    }
-    dataUrl = res.dataUrl;
-    via = `CDP screenshot, ${res.chunks} chunk(s), ${res.width}x${res.height}`;
+  img.scrollIntoView({ block: "start", behavior: "instant" });
+  await new Promise((r) => setTimeout(r, 200));
+  // decode() on a huge image can take a while (or never settle) — don't
+  // let that alone hang the whole clip.
+  await Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
+  const rect = img.getBoundingClientRect();
+  let res;
+  try {
+    res = await Promise.race([
+      chrome.runtime.sendMessage({
+        type: "captureRegionCDP",
+        rect: {
+          x: rect.left + window.scrollX,
+          y: rect.top + window.scrollY,
+          width: rect.width,
+          height: rect.height,
+          scale: window.devicePixelRatio || 1,
+        },
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("background never responded within 100s")), 100000)),
+    ]);
+  } catch (e) {
+    return { error: "CDP capture failed (content side): " + e.message };
   }
+  if (!res || !res.ok) {
+    return { error: "CDP capture failed: " + ((res && res.error) || "no response from background") };
+  }
+  return { dataUrl: res.dataUrl, via: "CDP" };
+}
+
+function jcpWebtoonCandidateImages() {
+  // "Big" = clearly content, not icons/avatars/loading bars/thumbnails.
+  const isBig = (img) => {
+    const r = img.getBoundingClientRect();
+    const w = Math.max(r.width, 0);
+    const h = Math.max(r.height, img.naturalHeight || 0);
+    return w >= 300 && h >= 150;
+  };
+  // Prefer the site's known post-content container; otherwise the tallest
+  // image's own <article>/<main>/#content region, else the whole page.
+  const sel = SITE_CONTENT_SELECTORS[location.hostname];
+  let roots = sel ? Array.from(document.querySelectorAll(sel)) : [];
+  if (!roots.length) {
+    let tallest = null;
+    let tallestH = 0;
+    document.querySelectorAll("img").forEach((img) => {
+      const r = img.getBoundingClientRect();
+      const h = Math.max(r.height, img.naturalHeight || 0);
+      if (r.width >= 100 && h > tallestH) {
+        tallest = img;
+        tallestH = h;
+      }
+    });
+    const region = tallest && tallest.closest("article, main, [role=main], #content, .content");
+    roots = [region || document.body];
+  }
+  const seen = new Set();
+  const out = [];
+  roots.forEach((root) => {
+    root.querySelectorAll("img").forEach((img) => {
+      if (seen.has(img) || !isBig(img)) return;
+      seen.add(img);
+      out.push(img);
+    });
+  });
+  return out;
+}
+
+async function jcpClipWebtoon() {
+  const imgs = jcpWebtoonCandidateImages().slice(0, 40);
+  if (!imgs.length) return { error: "No large image found on this page." };
+
+  const parts = [];
+  const vias = [];
+  for (let i = 0; i < imgs.length; i++) {
+    const r = await jcpWebtoonImageDataUrl(imgs[i]);
+    if (r.error) return { error: `image ${i + 1}/${imgs.length}: ${r.error}` };
+    parts.push(`![](${r.dataUrl})`);
+    vias.push(r.via);
+  }
+
+  const count = (v) => vias.filter((x) => x === v).length;
+  const via =
+    `${imgs.length} image(s): ` +
+    ["page", "background", "CDP"]
+      .filter((v) => count(v))
+      .map((v) => `${count(v)}× ${v}`)
+      .join(", ");
 
   return {
     mode: "webtoon",
     title: document.title,
-    markdown: `![](${dataUrl})`,
+    // Two trailing spaces = hard line break, so consecutive images stack
+    // tightly instead of getting a blank paragraph gap between them (or
+    // flowing side by side, which plain single newlines would do).
+    markdown: parts.join("  \n"),
     url: location.href,
     via,
   };
