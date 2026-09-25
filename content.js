@@ -963,6 +963,62 @@ function jcpMakeTurndown() {
     },
     replacement: (content, node) => node.outerHTML,
   });
+  // A markdown table row must stay on one line, but the GFM plugin's cell
+  // rule pastes cell content as-is — lists, captions and paragraphs inside a
+  // cell (Wikipedia infoboxes: "Original authors" list, screenshot caption)
+  // put newlines mid-row and the whole table fell apart. Join the lines
+  // with <br> (both Joplin and Obsidian render it inside a table cell) and
+  // escape stray pipes. Added after td.use(gfm) so it takes precedence.
+  td.addRule("jcpTableCellOneLine", {
+    filter: ["th", "td"],
+    replacement: (content, node) => {
+      const text = content
+        .trim()
+        .split(/\s*\n\s*/)
+        .filter(Boolean)
+        .join("<br>")
+        .replace(/(^|[^\\])\|/g, "$1\\|");
+      const index = Array.prototype.indexOf.call(node.parentNode.childNodes, node);
+      return (index === 0 ? "| " : " ") + text + " |";
+    },
+  });
+  // Tables, beyond what the GFM plugin does:
+  // - It keeps any table without a <th> first row as raw HTML. Obsidian can't
+  //   show ![[embeds]] inside HTML, so pictures in such tables (Korean
+  //   Wikipedia infoboxes, whose first row is the image) went missing. Any
+  //   table without a nested table is now a markdown table, its first row
+  //   used as the header. Tables holding tables (page-layout tables) stay HTML.
+  // - Markdown tables take their column count from the header row, so a
+  //   header cell spanning the table (English Wikipedia infobox title,
+  //   colspan=2) made a 1-column table and hid every value column. Pad all
+  //   rows (and the --- line) to the widest row.
+  // - A <caption> becomes a bold line above the table instead of a stray
+  //   line inside it.
+  td.addRule("jcpCaption", {
+    filter: "caption",
+    replacement: (content) => "\n" + (content.trim() ? `**${content.trim()}**` : "") + "\n",
+  });
+  td.addRule("jcpTable", {
+    filter: (node) => node.nodeName === "TABLE" && node.rows.length > 0 && !node.querySelector("table"),
+    replacement: (content) => {
+      const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+      const above = lines.filter((l) => !l.startsWith("|"));
+      const rows = lines.filter((l) => l.startsWith("|"));
+      // Spacer/layout tables with no text or images in them: drop the grid.
+      const hasContent = rows.some((l) => l.replace(/<br>|\\\||[|\s]/g, ""));
+      if (!hasContent) return above.length ? "\n\n" + above.join("\n\n") + "\n\n" : "";
+      const isSep = (l) => /^\|(\s*:?-+:?\s*\|)+$/.test(l);
+      if (!(rows.length > 1 && isSep(rows[1]))) rows.splice(1, 0, "| --- |");
+      const cols = (l) => (l.match(/(^|[^\\])\|/g) || []).length - 1;
+      const max = Math.max(...rows.map(cols));
+      const out = rows.map((l) => {
+        const missing = max - cols(l);
+        if (missing <= 0) return l;
+        return l + (isSep(l) ? " --- |" : "  |").repeat(missing);
+      });
+      return "\n\n" + (above.length ? above.join("\n\n") + "\n\n" : "") + out.join("\n") + "\n\n";
+    },
+  });
   return td;
 }
 
