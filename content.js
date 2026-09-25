@@ -976,6 +976,9 @@ function jcpMakeTurndown() {
         .trim()
         .split(/\s*\n\s*/)
         .filter(Boolean)
+        // List syntax doesn't work inside a table cell — "-   Shida Li"
+        // showed up literally. Use a bullet character instead.
+        .map((l) => l.replace(/^[-*+]\s+/, "• ").replace(/^(\d+)\.\s+/, "$1. "))
         .join("<br>")
         .replace(/(^|[^\\])\|/g, "$1\\|");
       const index = Array.prototype.indexOf.call(node.parentNode.childNodes, node);
