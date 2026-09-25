@@ -782,12 +782,7 @@ function jcpPreserveRenderedImageSize(img, baseUrl) {
   }
 }
 
-// options.forceScreenshotFallback: allow the tab-screenshot fallback on any
-// host, not just SCREENSHOT_FALLBACK_HOSTS — used by webtoon mode, where the
-// user explicitly asked for this one image, so the "might capture page UI
-// that overlaps it" concern behind the whitelist doesn't apply.
-async function jcpInlineImages(root, baseUrl, options) {
-  const forceFallback = !!(options && options.forceScreenshotFallback);
+async function jcpInlineImages(root, baseUrl) {
   const MAX_BYTES = 6 * 1024 * 1024;
   const MAX_TAB_CAPTURES = 20; // captureVisibleTab is rate-limited; cap the fallback
   const imgs = Array.from(
@@ -844,7 +839,7 @@ async function jcpInlineImages(root, baseUrl, options) {
   let tabCaptures = 0;
   for (const r of results) {
     let dataUrls = r.dataUrl ? [r.dataUrl] : null;
-    if (!dataUrls && r.abs && tabCaptures < MAX_TAB_CAPTURES && (forceFallback || SCREENSHOT_FALLBACK_HOSTS.has(location.hostname))) {
+    if (!dataUrls && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
       try {
         const liveEl = jcpFindLiveImg(r.abs, baseUrl);
         dataUrls = await jcpCaptureImageViaTab(liveEl, r.abs);
@@ -1078,10 +1073,13 @@ async function jcpClipSelection() {
 // Dedicated mode for scroll-style webtoon pages, kept separate from Article
 // mode so tall-image experimentation can't destabilize normal clipping.
 // Picks the page's tallest <img> automatically (by rendered height, falling
-// back to natural height for images that haven't laid out yet), and saves
-// just that image, titled with the page title. Uses the same image pipeline
-// as everywhere else (fetch first, then the tab-screenshot/segmenting
-// fallback), with the fallback allowed on any host.
+// back to natural height for images that haven't laid out yet) and saves
+// just that image, titled with the page title. The image bytes are fetched
+// directly when the site allows it (best quality, no permission needed);
+// otherwise the rendered image region is captured through the DevTools
+// Protocol (see captureRegionViaCDP in background.js) — no scrolling, no
+// segments, so no seams. If that fails the real error is returned to the
+// popup verbatim rather than silently falling back to something else.
 async function jcpClipWebtoon() {
   let best = null;
   let bestH = 0;
@@ -1096,19 +1094,52 @@ async function jcpClipWebtoon() {
   });
   if (!best) return { error: "No image found on this page." };
 
-  const container = document.createElement("div");
-  const p = document.createElement("p");
-  p.appendChild(best.cloneNode(false));
-  container.appendChild(p);
-  jcpAbsolutize(container, location.href);
-  await jcpInlineImages(container, location.href, { forceScreenshotFallback: true });
-  const td = jcpMakeTurndown();
-  const markdown = td.turndown(container.innerHTML);
+  let abs;
+  try {
+    abs = new URL(jcpRealImgUrl(best), location.href).href;
+  } catch (e) {
+    return { error: "Could not resolve the image URL." };
+  }
+
+  let dataUrl = null;
+  try {
+    const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 15000);
+    if (res.ok) {
+      let blob = await res.blob();
+      if (blob.size > 0) {
+        blob = await jcpDownscaleImage(blob);
+        dataUrl = await jcpBlobToDataUrl(blob);
+      }
+    }
+  } catch (e) {
+    // CORS-blocked or unreachable — fall through to the CDP capture below.
+  }
+
+  if (!dataUrl) {
+    best.scrollIntoView({ block: "start", behavior: "instant" });
+    await new Promise((r) => setTimeout(r, 200));
+    await best.decode().catch(() => {});
+    const rect = best.getBoundingClientRect();
+    const res = await chrome.runtime.sendMessage({
+      type: "captureRegionCDP",
+      rect: {
+        x: rect.left + window.scrollX,
+        y: rect.top + window.scrollY,
+        width: rect.width,
+        height: rect.height,
+        scale: window.devicePixelRatio || 1,
+      },
+    });
+    if (!res || !res.ok) {
+      return { error: "CDP capture failed: " + ((res && res.error) || "no response from background") };
+    }
+    dataUrl = res.dataUrl;
+  }
+
   return {
     mode: "webtoon",
     title: document.title,
-    markdown,
-    html: container.innerHTML,
+    markdown: `![](${dataUrl})`,
     url: location.href,
   };
 }

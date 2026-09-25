@@ -63,6 +63,86 @@ async function arrayBufferToBase64(buf) {
   return btoa(binary);
 }
 
+// --- Webtoon mode: Chrome DevTools Protocol capture -----------------------
+// Renders a page-relative rectangle straight from the renderer with
+// Page.captureScreenshot + captureBeyondViewport — no scrolling, so none of
+// the scroll/compositor-timing problems of the captureVisibleTab approach
+// below can occur. A very tall region is captured in fixed-height chunks
+// (a single 28000px+ screenshot risks hitting Chrome's max render surface
+// size, commonly ~16384px) and stitched on one canvas at exact integer
+// pixel boundaries, so chunks meet with no gap or overlap. Requires the
+// "debugger" permission; Chrome shows its "started debugging this browser"
+// bar while attached, and attach fails if DevTools is already open on the
+// same tab (only one debugger client per target) — errors are passed back
+// verbatim so failures are diagnosable instead of silent.
+function cdpAttach(target) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach(target, "1.3", () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
+function cdpDetach(target) {
+  return new Promise((resolve) => {
+    chrome.debugger.detach(target, () => {
+      void chrome.runtime.lastError;
+      resolve();
+    });
+  });
+}
+
+function cdpSend(target, method, params) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand(target, method, params || {}, (result) => {
+      if (chrome.runtime.lastError) reject(new Error(`${method}: ${chrome.runtime.lastError.message}`));
+      else resolve(result);
+    });
+  });
+}
+
+async function captureRegionViaCDP(tabId, rect) {
+  const target = { tabId };
+  const scale = rect.scale || 1;
+  const CHUNK_CSS_PX = Math.max(1, Math.floor(8000 / scale));
+  const totalH = Math.round(rect.height);
+  const x = Math.round(rect.x);
+  const y0 = Math.round(rect.y);
+  const width = Math.round(rect.width);
+
+  await cdpAttach(target);
+  try {
+    const bitmaps = [];
+    for (let offset = 0; offset < totalH; offset += CHUNK_CSS_PX) {
+      const h = Math.min(CHUNK_CSS_PX, totalH - offset);
+      const shot = await cdpSend(target, "Page.captureScreenshot", {
+        format: "jpeg",
+        quality: 92,
+        captureBeyondViewport: true,
+        clip: { x, y: y0 + offset, width, height: h, scale },
+      });
+      const blob = await (await fetch("data:image/jpeg;base64," + shot.data)).blob();
+      bitmaps.push(await createImageBitmap(blob));
+    }
+    const outW = bitmaps[0].width;
+    const outH = bitmaps.reduce((s, b) => s + b.height, 0);
+    const canvas = new OffscreenCanvas(outW, outH);
+    const ctx = canvas.getContext("2d");
+    let yy = 0;
+    for (const b of bitmaps) {
+      ctx.drawImage(b, 0, yy);
+      yy += b.height;
+      b.close();
+    }
+    const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+    const base64 = await arrayBufferToBase64(await outBlob.arrayBuffer());
+    return { dataUrl: `data:image/jpeg;base64,${base64}`, chunks: bitmaps.length, width: outW, height: outH };
+  } finally {
+    await cdpDetach(target);
+  }
+}
+
 // chrome.tabs.captureVisibleTab enforces its own quota (Chrome allows at
 // most ~2 calls/second per profile) — a post with several images in a row
 // that all need the screenshot fallback (see SCREENSHOT_FALLBACK_HOSTS in
@@ -199,6 +279,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === "captureImageRect") {
         const dataUrl = await captureImageRect(sender.tab.id, msg.rect);
         sendResponse({ ok: true, dataUrl });
+      } else if (msg.type === "captureRegionCDP") {
+        const r = await captureRegionViaCDP(sender.tab.id, msg.rect);
+        sendResponse({ ok: true, dataUrl: r.dataUrl, chunks: r.chunks, width: r.width, height: r.height });
       } else if (msg.type === "getZoom") {
         const zoom = await chrome.tabs.getZoom(sender.tab.id);
         sendResponse({ ok: true, zoom });
