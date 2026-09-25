@@ -1118,18 +1118,28 @@ async function jcpClipWebtoon() {
   if (!dataUrl) {
     best.scrollIntoView({ block: "start", behavior: "instant" });
     await new Promise((r) => setTimeout(r, 200));
-    await best.decode().catch(() => {});
+    // decode() on a huge image can take a while (or never settle) — don't
+    // let that alone hang the whole clip.
+    await Promise.race([best.decode().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
     const rect = best.getBoundingClientRect();
-    const res = await chrome.runtime.sendMessage({
-      type: "captureRegionCDP",
-      rect: {
-        x: rect.left + window.scrollX,
-        y: rect.top + window.scrollY,
-        width: rect.width,
-        height: rect.height,
-        scale: window.devicePixelRatio || 1,
-      },
-    });
+    let res;
+    try {
+      res = await Promise.race([
+        chrome.runtime.sendMessage({
+          type: "captureRegionCDP",
+          rect: {
+            x: rect.left + window.scrollX,
+            y: rect.top + window.scrollY,
+            width: rect.width,
+            height: rect.height,
+            scale: window.devicePixelRatio || 1,
+          },
+        }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("background never responded within 100s")), 100000)),
+      ]);
+    } catch (e) {
+      return { error: "CDP capture failed (content side): " + e.message };
+    }
     if (!res || !res.ok) {
       return { error: "CDP capture failed: " + ((res && res.error) || "no response from background") };
     }

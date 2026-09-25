@@ -102,6 +102,9 @@ function cdpSend(target, method, params) {
   });
 }
 
+// Every step has its own timeout and is recorded in `trace`, so if a step
+// stalls the error names exactly which one (and what completed before it)
+// instead of the whole clip just hanging on "Clipping…".
 async function captureRegionViaCDP(tabId, rect) {
   const target = { tabId };
   const scale = rect.scale || 1;
@@ -110,20 +113,38 @@ async function captureRegionViaCDP(tabId, rect) {
   const x = Math.round(rect.x);
   const y0 = Math.round(rect.y);
   const width = Math.round(rect.width);
+  const trace = [`rect x=${x} y=${y0} w=${width} h=${totalH} scale=${scale}`];
 
-  await cdpAttach(target);
+  const step = async (name, ms, promise) => {
+    try {
+      const out = await withTimeout(promise, ms, `timed out after ${ms / 1000}s`);
+      trace.push(`${name} ok`);
+      console.log("[JCP-WEBTOON]", name, "ok");
+      return out;
+    } catch (e) {
+      throw new Error(`step "${name}" failed: ${e.message} | trace: ${trace.join(" > ")}`);
+    }
+  };
+
+  await step("debugger.attach", 10000, cdpAttach(target));
   try {
     const bitmaps = [];
+    let idx = 0;
     for (let offset = 0; offset < totalH; offset += CHUNK_CSS_PX) {
       const h = Math.min(CHUNK_CSS_PX, totalH - offset);
-      const shot = await cdpSend(target, "Page.captureScreenshot", {
-        format: "jpeg",
-        quality: 92,
-        captureBeyondViewport: true,
-        clip: { x, y: y0 + offset, width, height: h, scale },
-      });
-      const blob = await (await fetch("data:image/jpeg;base64," + shot.data)).blob();
-      bitmaps.push(await createImageBitmap(blob));
+      const shot = await step(
+        `screenshot chunk ${idx} (y=${y0 + offset}, h=${h})`,
+        45000,
+        cdpSend(target, "Page.captureScreenshot", {
+          format: "jpeg",
+          quality: 92,
+          captureBeyondViewport: true,
+          clip: { x, y: y0 + offset, width, height: h, scale },
+        })
+      );
+      const blob = await step(`decode chunk ${idx}`, 20000, (await fetch("data:image/jpeg;base64," + shot.data)).blob());
+      bitmaps.push(await step(`bitmap chunk ${idx}`, 20000, createImageBitmap(blob)));
+      idx++;
     }
     const outW = bitmaps[0].width;
     const outH = bitmaps.reduce((s, b) => s + b.height, 0);
@@ -135,7 +156,7 @@ async function captureRegionViaCDP(tabId, rect) {
       yy += b.height;
       b.close();
     }
-    const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+    const outBlob = await step("stitch+encode", 40000, canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 }));
     const base64 = await arrayBufferToBase64(await outBlob.arrayBuffer());
     return { dataUrl: `data:image/jpeg;base64,${base64}`, chunks: bitmaps.length, width: outW, height: outH };
   } finally {
