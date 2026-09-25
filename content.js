@@ -1102,17 +1102,34 @@ async function jcpClipWebtoon() {
   }
 
   let dataUrl = null;
+  let via = null;
   try {
     const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 15000);
     if (res.ok) {
-      let blob = await res.blob();
+      const blob = await res.blob();
       if (blob.size > 0) {
-        blob = await jcpDownscaleImage(blob);
         dataUrl = await jcpBlobToDataUrl(blob);
+        via = `page fetch, original file ${blob.size} bytes`;
       }
     }
   } catch (e) {
-    // CORS-blocked or unreachable — fall through to the CDP capture below.
+    // CORS-blocked or unreachable — try the background fetch next.
+  }
+
+  // Under MV3 a content script's fetch obeys the page's CORS, but the
+  // background service worker doesn't (given host permission), so it can
+  // usually still pull the ORIGINAL file — perfect quality, no screenshot,
+  // no seams. Screenshotting is only the last resort below.
+  if (!dataUrl) {
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "fetchImageBytes", url: abs });
+      if (res && res.ok) {
+        dataUrl = res.dataUrl;
+        via = `background fetch, original file ${res.size} bytes`;
+      }
+    } catch (e) {
+      // fall through to CDP
+    }
   }
 
   if (!dataUrl) {
@@ -1144,6 +1161,7 @@ async function jcpClipWebtoon() {
       return { error: "CDP capture failed: " + ((res && res.error) || "no response from background") };
     }
     dataUrl = res.dataUrl;
+    via = `CDP screenshot, ${res.chunks} chunk(s), ${res.width}x${res.height}`;
   }
 
   return {
@@ -1151,6 +1169,7 @@ async function jcpClipWebtoon() {
     title: document.title,
     markdown: `![](${dataUrl})`,
     url: location.href,
+    via,
   };
 }
 

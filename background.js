@@ -300,6 +300,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === "captureImageRect") {
         const dataUrl = await captureImageRect(sender.tab.id, msg.rect);
         sendResponse({ ok: true, dataUrl });
+      } else if (msg.type === "fetchImageBytes") {
+        // Extension contexts (unlike content scripts under MV3) get CORS
+        // bypass for hosts covered by host_permissions, so this can pull
+        // the original file from CDNs that block fetch() from the page.
+        const res = await fetch(msg.url, { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status} fetching image`);
+        const blob = await res.blob();
+        if (!blob.size) throw new Error("empty image response");
+        if (blob.size > 40 * 1024 * 1024) throw new Error("image larger than 40MB");
+        const b64 = await arrayBufferToBase64(await blob.arrayBuffer());
+        sendResponse({ ok: true, dataUrl: `data:${blob.type || "image/jpeg"};base64,${b64}`, size: blob.size });
       } else if (msg.type === "captureRegionCDP") {
         const r = await captureRegionViaCDP(sender.tab.id, msg.rect);
         sendResponse({ ok: true, dataUrl: r.dataUrl, chunks: r.chunks, width: r.width, height: r.height });

@@ -64,7 +64,8 @@ clipBtn.addEventListener("click", () => {
     (res) => {
       clipBtn.disabled = false;
       if (res && res.ok) {
-        setStatus("Saved to Joplin ✓", "ok");
+        const via = res.preview && res.preview.via;
+        setStatus("Saved to Joplin ✓" + (via ? " (" + via + ")" : ""), "ok");
       } else {
         setStatus((res && res.error) || "Unknown error", "err");
       }
