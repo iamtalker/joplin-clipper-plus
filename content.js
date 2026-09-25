@@ -782,7 +782,12 @@ function jcpPreserveRenderedImageSize(img, baseUrl) {
   }
 }
 
-async function jcpInlineImages(root, baseUrl) {
+// options.forceScreenshotFallback: allow the tab-screenshot fallback on any
+// host, not just SCREENSHOT_FALLBACK_HOSTS — used by webtoon mode, where the
+// user explicitly asked for this one image, so the "might capture page UI
+// that overlaps it" concern behind the whitelist doesn't apply.
+async function jcpInlineImages(root, baseUrl, options) {
+  const forceFallback = !!(options && options.forceScreenshotFallback);
   const MAX_BYTES = 6 * 1024 * 1024;
   const MAX_TAB_CAPTURES = 20; // captureVisibleTab is rate-limited; cap the fallback
   const imgs = Array.from(
@@ -839,7 +844,7 @@ async function jcpInlineImages(root, baseUrl) {
   let tabCaptures = 0;
   for (const r of results) {
     let dataUrls = r.dataUrl ? [r.dataUrl] : null;
-    if (!dataUrls && r.abs && tabCaptures < MAX_TAB_CAPTURES && SCREENSHOT_FALLBACK_HOSTS.has(location.hostname)) {
+    if (!dataUrls && r.abs && tabCaptures < MAX_TAB_CAPTURES && (forceFallback || SCREENSHOT_FALLBACK_HOSTS.has(location.hostname))) {
       try {
         const liveEl = jcpFindLiveImg(r.abs, baseUrl);
         dataUrls = await jcpCaptureImageViaTab(liveEl, r.abs);
@@ -1070,6 +1075,44 @@ async function jcpClipSelection() {
   };
 }
 
+// Dedicated mode for scroll-style webtoon pages, kept separate from Article
+// mode so tall-image experimentation can't destabilize normal clipping.
+// Picks the page's tallest <img> automatically (by rendered height, falling
+// back to natural height for images that haven't laid out yet), and saves
+// just that image, titled with the page title. Uses the same image pipeline
+// as everywhere else (fetch first, then the tab-screenshot/segmenting
+// fallback), with the fallback allowed on any host.
+async function jcpClipWebtoon() {
+  let best = null;
+  let bestH = 0;
+  document.querySelectorAll("img").forEach((img) => {
+    const r = img.getBoundingClientRect();
+    if (r.width < 100 && (img.naturalWidth || 0) < 100) return;
+    const h = Math.max(r.height, img.naturalHeight || 0);
+    if (h > bestH) {
+      best = img;
+      bestH = h;
+    }
+  });
+  if (!best) return { error: "No image found on this page." };
+
+  const container = document.createElement("div");
+  const p = document.createElement("p");
+  p.appendChild(best.cloneNode(false));
+  container.appendChild(p);
+  jcpAbsolutize(container, location.href);
+  await jcpInlineImages(container, location.href, { forceScreenshotFallback: true });
+  const td = jcpMakeTurndown();
+  const markdown = td.turndown(container.innerHTML);
+  return {
+    mode: "webtoon",
+    title: document.title,
+    markdown,
+    html: container.innerHTML,
+    url: location.href,
+  };
+}
+
 function jcpClipBookmark() {
   const meta = jcpPageMeta();
   return { mode: "bookmark", ...meta };
@@ -1083,6 +1126,8 @@ async function jcpRunClip(mode) {
       return jcpClipFullPage();
     case "selection":
       return jcpClipSelection();
+    case "webtoon":
+      return jcpClipWebtoon();
     case "bookmark":
       return jcpClipBookmark();
     default:
