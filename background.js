@@ -272,6 +272,22 @@ async function createNote({ clip, parentId, tags, titleOverride }) {
   });
 }
 
+async function clipAndSave(tabId, mode, opts) {
+  const clip = await withTimeout(
+    runClipOnTab(tabId, mode),
+    120000,
+    "클리핑이 2분 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
+  );
+  if (clip.error) return { ok: false, error: clip.error };
+  const note = await createNote({
+    clip,
+    parentId: opts.parentId,
+    tags: opts.tags,
+    titleOverride: opts.title,
+  });
+  return { ok: true, note, preview: clip };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
@@ -281,22 +297,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, folders: await listFolders() });
       } else if (msg.type === "clip") {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const clip = await withTimeout(
-          runClipOnTab(tab.id, msg.mode),
-          120000,
-          "클리핑이 2분 안에 끝나지 않았어요. 이미지가 너무 크거나 사이트가 느릴 수 있어요."
-        );
-        if (clip.error) {
-          sendResponse({ ok: false, error: clip.error });
+        sendResponse(await clipAndSave(tab.id, msg.mode, msg));
+      } else if (msg.type === "startSelectionToolbar") {
+        // Popup asks: does the page already have a selection? If yes, the
+        // popup clips it right away as before; if no, show the in-page
+        // toolbar so the user can select first and save from there.
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [{ result: hasSelection }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const s = window.getSelection();
+            return !!(s && s.rangeCount && !s.isCollapsed);
+          },
+        });
+        if (hasSelection) {
+          sendResponse({ ok: true, hasSelection: true });
           return;
         }
-        const note = await createNote({
-          clip,
-          parentId: msg.parentId,
-          tags: msg.tags,
-          titleOverride: msg.title,
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (o) => {
+            window.__jcpToolbarOpts = o;
+          },
+          args: [{ parentId: msg.parentId, tags: msg.tags, title: msg.title }],
         });
-        sendResponse({ ok: true, note, preview: clip });
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["toolbar.js"] });
+        sendResponse({ ok: true, hasSelection: false });
+      } else if (msg.type === "clipSelectionFromToolbar") {
+        sendResponse(await clipAndSave(sender.tab.id, "selection", msg));
       } else if (msg.type === "captureImageRect") {
         const dataUrl = await captureImageRect(sender.tab.id, msg.rect);
         sendResponse({ ok: true, dataUrl });

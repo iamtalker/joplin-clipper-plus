@@ -1,6 +1,6 @@
 # HANDOFF — 다음 세션에서 이어서 하기 위한 인계 문서
 
-마지막 갱신: 2026-09-25 / 현재 버전: **v0.35.1** (GitHub 태그 푸시 완료) / 작업 폴더: `C:\claude program\joplin-clipper`
+마지막 갱신: 2026-09-25 / 현재 버전: **v0.36.0** (GitHub 태그 푸시 완료) / 작업 폴더: `C:\claude program\joplin-clipper`
 
 ## 0. 먼저 읽을 것
 - 프로젝트 메모리(자동 로드): `C:\Users\misti\.claude\projects\C--claude-program-joplin-clipper\memory\` (`project_joplin_clipper.md`, `feedback_versioning_workflow.md`) — 아키텍처, 함정, 삽질 이력이 상세히 있음.
@@ -24,7 +24,7 @@
 - 트위터 임베드는 링크만 남김. 실제 내용 캡처는 사용자가 "귀찮다"며 보류.
 
 ## 4. 다음에 할 만한 것 (사용자가 언급했던 것들)
-1. **Selection 모드 UX 개선**: 지금은 "먼저 선택 → 아이콘 → Selection → Clip" 순서(팝업이 페이지 클릭 시 닫히는 제약 때문). 사용자는 "모드 먼저 → 선택 → 저장" 순서를 원함 → 팝업 대신 **페이지에 삽입되는 플로팅 툴바(저장/취소)** 방식. 최소 버전(기본 노트북, 제목/태그 수정 없이 저장)부터 가볍게 시작하기로 얘기함. 저장은 여전히 background 경유(페이지 CSP 때문에 content script에서 Joplin API 직접 호출 금지).
+1. ~~**Selection 모드 UX 개선**~~ → **v0.36.0에서 완료**(`toolbar.js` 플로팅 툴바, 팝업의 Selection 버튼이 선택 없을 때 띄움). 후속 후보: 툴바 안에서 노트북/제목 바꾸기. (원래 메모: 지금은 "먼저 선택 → 아이콘 → Selection → Clip" 순서(팝업이 페이지 클릭 시 닫히는 제약 때문). 사용자는 "모드 먼저 → 선택 → 저장" 순서를 원함 → 팝업 대신 **페이지에 삽입되는 플로팅 툴바(저장/취소)** 방식. 최소 버전(기본 노트북, 제목/태그 수정 없이 저장)부터 가볍게 시작하기로 얘기함. 저장은 여전히 background 경유(페이지 CSP 때문에 content script에서 Joplin API 직접 호출 금지).
 2. FM코리아 등 다른 사이트 추가(사용자가 사이트를 알려줄 때).
 3. 스토어 새 버전 제출 시 권한 정당화(위 3번).
 
