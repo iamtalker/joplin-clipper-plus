@@ -1,4 +1,6 @@
 let mode = "article";
+// Shared with the Obsidian fork: name the target app from the manifest.
+const APP = /obsidian/i.test(chrome.runtime.getManifest().name) ? "Obsidian" : "Joplin";
 const statusEl = document.getElementById("status");
 const titleEl = document.getElementById("title");
 const notebookEl = document.getElementById("notebook");
@@ -66,7 +68,7 @@ async function init() {
     }
     const opt0 = document.createElement("option");
     opt0.value = "";
-    opt0.textContent = "(default notebook)";
+    opt0.textContent = res.defaultLabel || "(default notebook)";
     notebookEl.appendChild(opt0);
     res.folders
       .sort((a, b) => a.title.localeCompare(b.title))
@@ -94,7 +96,8 @@ clipBtn.addEventListener("click", () => {
       clipBtn.disabled = false;
       if (res && res.ok) {
         const via = res.preview && res.preview.via;
-        setStatus("Saved to Joplin ✓" + (via ? " (" + via + ")" : ""), "ok");
+        const where = res.note && res.note.path ? " → " + res.note.path : "";
+        setStatus("Saved to " + APP + " ✓" + where + (via ? " (" + via + ")" : ""), "ok");
       } else {
         setStatus((res && res.error) || "Unknown error", "err");
       }

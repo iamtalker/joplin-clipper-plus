@@ -2,7 +2,7 @@
 // then save". The popup can't do this itself — it closes as soon as the user
 // clicks into the page to make a selection — so the popup injects this into
 // the page instead and closes. Saving still goes through background.js (the
-// page's CSP would block calling the Joplin API from here).
+// page's CSP would block calling the Joplin/Obsidian API from here).
 //
 // Rendered inside a closed shadow root so the page's CSS can't restyle it,
 // and every mousedown on it is preventDefault'ed so clicking a button doesn't
@@ -21,6 +21,7 @@
   }
 
   let current = opts;
+  const APP = /obsidian/i.test(chrome.runtime.getManifest().name) ? "Obsidian" : "Joplin";
   const host = document.createElement("div");
   host.id = HOST_ID;
   host.style.cssText = "all: initial; position: fixed; top: 16px; right: 16px; z-index: 2147483647;";
@@ -39,7 +40,7 @@
       .ok { color: #1a7f37; } .err { color: #c62828; }
     </style>
     <div class="bar">
-      <div class="title">📎 Joplin — Selection</div>
+      <div class="title">📎 ${APP} — Selection</div>
       <div class="hint" id="hint"></div>
       <div class="row">
         <button id="save">💾 Save</button>
@@ -95,7 +96,7 @@
         return;
       }
       if (res && res.ok) {
-        setHint("Joplin에 저장했어요 ✓", "ok");
+        setHint(APP + "에 저장했어요 ✓", "ok");
         setTimeout(close, 1500);
       } else {
         setHint((res && res.error) || "Unknown error", "err");
