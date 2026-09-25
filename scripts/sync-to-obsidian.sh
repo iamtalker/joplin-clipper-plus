@@ -6,7 +6,7 @@
 #   bash scripts/sync-to-obsidian.sh [path-to-obsidian-clipper]
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
-DST="${1:-$SRC/../obsidian-clipper}"
+DST="${1:-$SRC/../obsidian-clipper-plus}"
 SHARED=(content.js core.js toolbar.js popup.js lib/Readability.js lib/turndown.js lib/turndown-plugin-gfm.js)
 [ -d "$DST" ] || { echo "not found: $DST" >&2; exit 1; }
 mkdir -p "$DST/lib"
