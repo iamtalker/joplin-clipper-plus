@@ -1,6 +1,6 @@
 // Shared between Joplin Clipper Plus and Obsidian Clipper Plus — keep this
 // file backend-agnostic. It holds page injection, every capture fallback
-// (tab screenshot, CDP, background fetch) and the message router; the
+// (tab screenshot, background fetch) and the message router; the
 // note-saving side lives in background.js, which loads this file with
 // importScripts() and defines globalThis.BACKEND:
 //   testConnection() -> { ok, error? }
@@ -18,107 +18,6 @@ async function arrayBufferToBase64(buf) {
     binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
   }
   return btoa(binary);
-}
-
-// --- Webtoon mode: Chrome DevTools Protocol capture -----------------------
-// Renders a page-relative rectangle straight from the renderer with
-// Page.captureScreenshot + captureBeyondViewport — no scrolling, so none of
-// the scroll/compositor-timing problems of the captureVisibleTab approach
-// below can occur. A very tall region is captured in fixed-height chunks
-// (a single 28000px+ screenshot risks hitting Chrome's max render surface
-// size, commonly ~16384px) and stitched on one canvas at exact integer
-// pixel boundaries, so chunks meet with no gap or overlap. Requires the
-// "debugger" permission; Chrome shows its "started debugging this browser"
-// bar while attached, and attach fails if DevTools is already open on the
-// same tab (only one debugger client per target) — errors are passed back
-// verbatim so failures are diagnosable instead of silent.
-function cdpAttach(target) {
-  return new Promise((resolve, reject) => {
-    chrome.debugger.attach(target, "1.3", () => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve();
-    });
-  });
-}
-
-function cdpDetach(target) {
-  return new Promise((resolve) => {
-    chrome.debugger.detach(target, () => {
-      void chrome.runtime.lastError;
-      resolve();
-    });
-  });
-}
-
-function cdpSend(target, method, params) {
-  return new Promise((resolve, reject) => {
-    chrome.debugger.sendCommand(target, method, params || {}, (result) => {
-      if (chrome.runtime.lastError) reject(new Error(`${method}: ${chrome.runtime.lastError.message}`));
-      else resolve(result);
-    });
-  });
-}
-
-// Every step has its own timeout and is recorded in `trace`, so if a step
-// stalls the error names exactly which one (and what completed before it)
-// instead of the whole clip just hanging on "Clipping…".
-async function captureRegionViaCDP(tabId, rect) {
-  const target = { tabId };
-  const scale = rect.scale || 1;
-  const CHUNK_CSS_PX = Math.max(1, Math.floor(8000 / scale));
-  const totalH = Math.round(rect.height);
-  const x = Math.round(rect.x);
-  const y0 = Math.round(rect.y);
-  const width = Math.round(rect.width);
-  const trace = [`rect x=${x} y=${y0} w=${width} h=${totalH} scale=${scale}`];
-
-  const step = async (name, ms, promise) => {
-    try {
-      const out = await withTimeout(promise, ms, `timed out after ${ms / 1000}s`);
-      trace.push(`${name} ok`);
-      console.log("[JCP-WEBTOON]", name, "ok");
-      return out;
-    } catch (e) {
-      throw new Error(`step "${name}" failed: ${e.message} | trace: ${trace.join(" > ")}`);
-    }
-  };
-
-  await step("debugger.attach", 10000, cdpAttach(target));
-  try {
-    const bitmaps = [];
-    let idx = 0;
-    for (let offset = 0; offset < totalH; offset += CHUNK_CSS_PX) {
-      const h = Math.min(CHUNK_CSS_PX, totalH - offset);
-      const shot = await step(
-        `screenshot chunk ${idx} (y=${y0 + offset}, h=${h})`,
-        45000,
-        cdpSend(target, "Page.captureScreenshot", {
-          format: "jpeg",
-          quality: 92,
-          captureBeyondViewport: true,
-          clip: { x, y: y0 + offset, width, height: h, scale },
-        })
-      );
-      const blob = await step(`decode chunk ${idx}`, 20000, (await fetch("data:image/jpeg;base64," + shot.data)).blob());
-      bitmaps.push(await step(`bitmap chunk ${idx}`, 20000, createImageBitmap(blob)));
-      idx++;
-    }
-    const outW = bitmaps[0].width;
-    const outH = bitmaps.reduce((s, b) => s + b.height, 0);
-    const canvas = new OffscreenCanvas(outW, outH);
-    const ctx = canvas.getContext("2d");
-    let yy = 0;
-    for (const b of bitmaps) {
-      ctx.drawImage(b, 0, yy);
-      yy += b.height;
-      b.close();
-    }
-    const outBlob = await step("stitch+encode", 40000, canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 }));
-    const base64 = await arrayBufferToBase64(await outBlob.arrayBuffer());
-    return { dataUrl: `data:image/jpeg;base64,${base64}`, chunks: bitmaps.length, width: outW, height: outH };
-  } finally {
-    await cdpDetach(target);
-  }
 }
 
 // chrome.tabs.captureVisibleTab enforces its own quota (Chrome allows at
@@ -278,9 +177,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (blob.size > 40 * 1024 * 1024) throw new Error("image larger than 40MB");
         const b64 = await arrayBufferToBase64(await blob.arrayBuffer());
         sendResponse({ ok: true, dataUrl: `data:${blob.type || "image/jpeg"};base64,${b64}`, size: blob.size });
-      } else if (msg.type === "captureRegionCDP") {
-        const r = await captureRegionViaCDP(sender.tab.id, msg.rect);
-        sendResponse({ ok: true, dataUrl: r.dataUrl, chunks: r.chunks, width: r.width, height: r.height });
       } else if (msg.type === "getZoom") {
         const zoom = await chrome.tabs.getZoom(sender.tab.id);
         sendResponse({ ok: true, zoom });

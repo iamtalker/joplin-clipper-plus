@@ -732,12 +732,20 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
     // comment) before finding the actual cause was downstream, in how
     // jcpInlineImages inserts the resulting segments — see the comment
     // there. The capture logic itself was never the problem.
+    //
+    // `doneUntil` tracks how far down the image (in image coordinates) has
+    // already been captured. Near the end of the page the browser can't
+    // scroll a full window height — the scroll gets clamped — so the next
+    // window would re-show part of the previous segment; starting each
+    // segment at doneUntil instead of the window top keeps that part from
+    // being captured twice (it showed up as a repeated strip of the image).
     const MAX_SEGMENTS = 25;
     const dataUrls = [];
+    let doneUntil = 0;
     for (let i = 0; i < MAX_SEGMENTS; i++) {
       rect = liveImgEl.getBoundingClientRect();
       if (rect.bottom <= 1 || rect.width < 1) break;
-      const visTop = Math.max(0, rect.top);
+      const visTop = Math.max(0, rect.top, rect.top + doneUntil);
       const visBottom = Math.min(window.innerHeight, rect.bottom);
       if (visBottom - visTop < 1) break;
       const res = await chrome.runtime.sendMessage({
@@ -745,6 +753,7 @@ async function jcpCaptureImageViaTab(liveImgEl, targetAbsUrl) {
         rect: { x: rect.left, y: visTop, width: rect.width, height: visBottom - visTop, dpr },
       });
       if (res && res.ok) dataUrls.push(res.dataUrl);
+      doneUntil = visBottom - rect.top;
       if (rect.bottom <= window.innerHeight) break; // this segment already reached the image's bottom edge
       window.scrollBy({ top: window.innerHeight, left: 0, behavior: "instant" });
       await new Promise((r) => setTimeout(r, 200));
@@ -1176,9 +1185,10 @@ async function jcpClipSelection() {
 // single tallest one and the story just stopped where that file ended).
 // Each image is obtained the best way available: the original file via
 // page fetch, else via the background service worker (which isn't bound by
-// the page's CORS given host permission), and only as a last resort a CDP
-// screenshot of the rendered region (see captureRegionViaCDP in
-// background.js). Failures return the real error to the popup verbatim.
+// the page's CORS given host permission), and only as a last resort a
+// screenshot of the rendered image (jcpCaptureImageViaTab). Returns
+// { dataUrls: [...] } (several for a segmented screenshot) or { error },
+// which is passed to the popup verbatim.
 async function jcpWebtoonImageDataUrl(img) {
   let abs;
   try {
@@ -1191,7 +1201,7 @@ async function jcpWebtoonImageDataUrl(img) {
     const res = await jcpFetchWithTimeout(abs, { credentials: "include" }, 15000);
     if (res.ok) {
       const blob = await res.blob();
-      if (blob.size > 0) return { dataUrl: await jcpBlobToDataUrl(blob), via: "page" };
+      if (blob.size > 0) return { dataUrls: [await jcpBlobToDataUrl(blob)], via: "page" };
     }
   } catch (e) {
     // CORS-blocked or unreachable — try the background fetch next.
@@ -1199,39 +1209,28 @@ async function jcpWebtoonImageDataUrl(img) {
 
   try {
     const res = await chrome.runtime.sendMessage({ type: "fetchImageBytes", url: abs });
-    if (res && res.ok) return { dataUrl: res.dataUrl, via: "background" };
+    if (res && res.ok) return { dataUrls: [res.dataUrl], via: "background" };
   } catch (e) {
-    // fall through to CDP
+    // fall through to the screenshot
   }
 
-  img.scrollIntoView({ block: "start", behavior: "instant" });
-  await new Promise((r) => setTimeout(r, 200));
-  // decode() on a huge image can take a while (or never settle) — don't
-  // let that alone hang the whole clip.
-  await Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
-  const rect = img.getBoundingClientRect();
-  let res;
+  // Last resort: screenshot the image as rendered on screen (scrolling
+  // through it in segments if it's taller than the window). Used to be a
+  // chrome.debugger (CDP) capture, removed in v0.39.1 — the background
+  // fetch above handles every site tested so far, and the "debugger"
+  // permission was only there for this rare case while making the Chrome
+  // Web Store review much harder. Very tall images captured this way can
+  // show faint seams between segments.
+  let shots = null;
   try {
-    res = await Promise.race([
-      chrome.runtime.sendMessage({
-        type: "captureRegionCDP",
-        rect: {
-          x: rect.left + window.scrollX,
-          y: rect.top + window.scrollY,
-          width: rect.width,
-          height: rect.height,
-          scale: window.devicePixelRatio || 1,
-        },
-      }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("background never responded within 100s")), 100000)),
-    ]);
+    shots = await jcpCaptureImageViaTab(img, abs);
   } catch (e) {
-    return { error: "CDP capture failed (content side): " + e.message };
+    return { error: "screenshot capture failed: " + e.message };
   }
-  if (!res || !res.ok) {
-    return { error: "CDP capture failed: " + ((res && res.error) || "no response from background") };
+  if (!shots || !shots.length) {
+    return { error: "the image couldn't be downloaded or captured from the screen" };
   }
-  return { dataUrl: res.dataUrl, via: "CDP" };
+  return { dataUrls: shots, via: "screenshot" };
 }
 
 function jcpWebtoonCandidateImages() {
@@ -1281,14 +1280,14 @@ async function jcpClipWebtoon() {
   for (let i = 0; i < imgs.length; i++) {
     const r = await jcpWebtoonImageDataUrl(imgs[i]);
     if (r.error) return { error: `image ${i + 1}/${imgs.length}: ${r.error}` };
-    parts.push(`![](${r.dataUrl})`);
+    for (const d of r.dataUrls) parts.push(`![](${d})`);
     vias.push(r.via);
   }
 
   const count = (v) => vias.filter((x) => x === v).length;
   const via =
     `${imgs.length} image(s): ` +
-    ["page", "background", "CDP"]
+    ["page", "background", "screenshot"]
       .filter((v) => count(v))
       .map((v) => `${count(v)}× ${v}`)
       .join(", ");
