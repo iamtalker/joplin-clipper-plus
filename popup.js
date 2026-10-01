@@ -12,11 +12,18 @@ function setStatus(text, cls) {
   statusEl.className = cls || "";
 }
 
+function setMode(m) {
+  const btn = document.querySelector(`.modes button[data-mode="${m}"]`);
+  if (!btn) return false;
+  document.querySelectorAll(".modes button").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  mode = m;
+  return true;
+}
+
 document.querySelectorAll(".modes button").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".modes button").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    mode = btn.dataset.mode;
+    setMode(btn.dataset.mode);
     if (mode === "selection") startSelection();
   });
 });
@@ -26,7 +33,7 @@ document.querySelectorAll(".modes button").forEach((btn) => {
 // the user clicks into the page to select) and close. If something is
 // already selected, stay here and let Clip save it as before.
 let tabTitle = "";
-function startSelection() {
+function startSelection(onHasSelection) {
   const title = titleEl.value.trim();
   chrome.runtime.sendMessage(
     {
@@ -40,7 +47,8 @@ function startSelection() {
       if (!res || !res.ok) {
         setStatus((res && res.error) || "Unknown error", "err");
       } else if (res.hasSelection) {
-        setStatus("선택된 부분이 있어요 — Clip을 누르세요");
+        if (onHasSelection) onHasSelection();
+        else setStatus("선택된 부분이 있어요 — Clip을 누르세요");
       } else {
         window.close();
       }
@@ -58,6 +66,12 @@ async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   tabTitle = tab.title || "";
   titleEl.value = tabTitle;
+
+  // Defaults picked on the options page, so the popup opens ready to Clip.
+  // Choosing a default mode here doesn't open the Selection toolbar by
+  // itself — that only happens on an actual click (button or Clip).
+  const { defaultMode, defaultFolderId } = await chrome.storage.local.get(["defaultMode", "defaultFolderId"]);
+  if (defaultMode) setMode(defaultMode);
 
   chrome.runtime.sendMessage({ type: "listFolders" }, (res) => {
     notebookEl.innerHTML = "";
@@ -78,10 +92,21 @@ async function init() {
         opt.textContent = f.title;
         notebookEl.appendChild(opt);
       });
+    // Only if it still exists — a deleted notebook falls back to the default.
+    if (defaultFolderId && res.folders.some((f) => f.id === defaultFolderId)) {
+      notebookEl.value = defaultFolderId;
+    }
   });
 }
 
 clipBtn.addEventListener("click", () => {
+  // Selection as the default mode: with nothing selected yet, Clip opens
+  // the in-page toolbar instead of failing with "No text is selected".
+  if (mode === "selection") startSelection(clip);
+  else clip();
+});
+
+function clip() {
   clipBtn.disabled = true;
   setStatus("Clipping…");
   chrome.runtime.sendMessage(
@@ -103,6 +128,6 @@ clipBtn.addEventListener("click", () => {
       }
     }
   );
-});
+}
 
 init();

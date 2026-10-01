@@ -7,7 +7,7 @@
   body { font-family: -apple-system, Segoe UI, Arial, sans-serif; width: 420px; padding: 16px; color: #222; }
   h1 { font-size: 16px; margin: 0 0 12px; }
   label { display: block; font-size: 12px; font-weight: 600; margin: 12px 0 4px; }
-  input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
   button { margin-top: 14px; padding: 7px 14px; font-size: 13px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
   button.secondary { background: #eee; color: #333; margin-left: 8px; }
   #status { margin-top: 10px; font-size: 12px; }
@@ -25,6 +25,19 @@
 
   <label for="token">Authorization token</label>
   <input id="token" type="password" autocomplete="off" placeholder="paste token from Joplin's Web Clipper options page" />
+
+  <label for="defMode">Default clip mode</label>
+  <select id="defMode">
+    <option value="article">📄 Article</option>
+    <option value="full">🖼 Full Page</option>
+    <option value="selection">✂️ Selection</option>
+    <option value="bookmark">🔖 Bookmark</option>
+    <option value="webtoon">📜 Webtoon (all big images)</option>
+  </select>
+
+  <label for="defNotebook">Default notebook</label>
+  <select id="defNotebook"><option value="">(default notebook)</option></select>
+  <div class="hint">The popup opens with these already selected — click the icon, then just Clip. You can still change them in the popup each time. The notebook list needs the token above (Joplin must be running).</div>
 
   <button id="save">Save</button>
   <button id="test" class="secondary">Test connection</button>
