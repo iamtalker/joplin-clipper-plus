@@ -364,6 +364,39 @@ function jcpApplyTitleLabels(root, selectors) {
   });
 }
 
+// Generic noise removal for sites with no SITE_CLEANUP_SELECTORS entry: drops
+// elements whose class/id *words* (split on - _ and whitespace, so "shadow"
+// never matches "ad") name ads, share bars, related lists or comments. Never
+// removes an element holding most of the page text, so a misleading class on
+// a content wrapper can't wipe out the article.
+const JCP_NOISE_WORDS = new Set([
+  "ad", "ads", "adv", "advert", "advertisement", "adslot", "banner", "promo",
+  "share", "sharing", "sns", "social", "related", "recommend", "recommended",
+  "comment", "comments", "reply", "replies", "newsletter", "subscribe", "popup",
+]);
+function jcpStripNoiseByName(root) {
+  const total = (root.textContent || "").length || 1;
+  const tokens = (s) => String(s || "").toLowerCase().split(/[^a-z0-9]+/);
+  root.querySelectorAll("[class], [id]").forEach((el) => {
+    if (/^(html|body|main|article)$/i.test(el.tagName)) return;
+    const cls = typeof el.className === "string" ? el.className : "";
+    if (!tokens(cls).concat(tokens(el.id)).some((t) => JCP_NOISE_WORDS.has(t))) return;
+    if ((el.textContent || "").length > total * 0.5) return;
+    el.remove();
+  });
+}
+
+// For an unregistered site: the page's single <article> element, when it is a
+// plausible post body (not the whole page, not a feed of many articles).
+function jcpSingleArticleEl(root) {
+  const arts = root.querySelectorAll("article");
+  if (arts.length !== 1) return null;
+  const len = arts[0].textContent.trim().length;
+  const bodyLen = root.body ? root.body.textContent.trim().length : 0;
+  if (len < 200 || (bodyLen && len > bodyLen * 0.7)) return null;
+  return arts[0];
+}
+
 // Strips common Korean bulletin-board (Gnuboard-style) chrome — prev/next/list
 // nav links and "author | date | 조회 N" meta lines — that Readability's
 // scoring sometimes keeps because it sits right next to the real post body.
@@ -1088,8 +1121,12 @@ async function jcpClipArticle() {
     const docClone = effectiveDoc.cloneNode(true);
     jcpAbsolutize(docClone, baseUrl);
     jcpStripBoardChrome(docClone);
+    jcpStripNoiseByName(docClone.body);
+    const articleEl = jcpSingleArticleEl(docClone);
+    const articleCopy = articleEl ? articleEl.cloneNode(true) : null; // before parse() mutates the clone
     const readabilityArticle = new Readability(docClone).parse();
     const readabilityLen = readabilityArticle ? readabilityArticle.textContent.trim().length : 0;
+    const articleLen = articleCopy ? articleCopy.textContent.trim().length : 0;
 
     // Only switch to the heading-LCA when it's substantially bigger (not just
     // noise) and still clearly narrower than the whole page (not "nav +
@@ -1103,6 +1140,13 @@ async function jcpClipArticle() {
       jcpStripWikiMetaLine(headingLCA);
       jcpStripBoardChrome(headingLCA);
       article = { title: document.title, content: headingLCA.innerHTML, excerpt: "", byline: "" };
+    } else if (
+      articleCopy && readabilityArticle &&
+      articleLen >= readabilityLen * 0.5 && articleLen <= readabilityLen * 1.3
+    ) {
+      // A tighter container than Readability's pick (which tends to drag in
+      // neighbouring share/related blocks on news sites).
+      article = { title: readabilityArticle.title, content: articleCopy.innerHTML, excerpt: readabilityArticle.excerpt || "", byline: readabilityArticle.byline || "" };
     } else if (readabilityArticle) {
       article = readabilityArticle;
     } else if (headingLCA) {
