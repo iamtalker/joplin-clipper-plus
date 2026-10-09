@@ -95,6 +95,10 @@ const SITE_CONTENT_SELECTORS = {
   // footer menus. Title, reporter+date and the article body each have
   // their own element.
   "v.daum.net": "h3.tit_view, .info_view, .article_view",
+  // Money Today: headline, reporter + date, and the article body each have
+  // their own stable id/class; everything else (breadcrumb, sidebar, share
+  // tools, comments) is outside these.
+  "www.mt.co.kr": "#articleTitle h1, #articleTitle .name, #articleTitle .date, #articleView",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -271,6 +275,7 @@ const SITE_CLEANUP_SELECTORS = {
   // they'd leak into the markdown as stray "공유새창" noise (see jcpCleanVideoTags,
   // which only replaces the <video> tag, not sibling chrome around it).
   "bbs.ruliweb.com": [".reply_count", ".rv-video-control-panel"],
+  "www.mt.co.kr": [".article_ads", ".ad-tag"],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
