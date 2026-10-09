@@ -99,6 +99,10 @@ const SITE_CONTENT_SELECTORS = {
   // their own stable id/class; everything else (breadcrumb, sidebar, share
   // tools, comments) is outside these.
   "www.mt.co.kr": "#articleTitle h1, #articleTitle .name, #articleTitle .date, #articleView",
+  // Chosun Ilbo (Arc/Fusion): stable BEM-style classes. The headline and the
+  // article-body section are all that is wanted; ad slots (.arcad-wrapper)
+  // sit between paragraphs.
+  "www.chosun.com": ".article-header__headline, section.article-body",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -276,6 +280,7 @@ const SITE_CLEANUP_SELECTORS = {
   // which only replaces the <video> tag, not sibling chrome around it).
   "bbs.ruliweb.com": [".reply_count", ".rv-video-control-panel"],
   "www.mt.co.kr": [".article_ads", ".ad-tag"],
+  "www.chosun.com": [".arcad-wrapper"],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
