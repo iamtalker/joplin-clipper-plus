@@ -317,6 +317,11 @@ function jcpStripNonContentTags(root) {
   root
     .querySelectorAll("script, style, noscript, template, link[rel='stylesheet'], ins.adsbygoogle")
     .forEach((el) => el.remove());
+  // <picture> <source> variants are never rendered by Turndown (it only reads
+  // the fallback <img>), but each one leaves a whitespace text node behind;
+  // six of them (Kyunghyang) put 6 leading spaces before "![", which Markdown
+  // reads as an indented code block — the photo shows up as literal text.
+  root.querySelectorAll("picture > source").forEach((el) => el.remove());
   return root;
 }
 
