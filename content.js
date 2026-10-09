@@ -603,7 +603,11 @@ function jcpDownscaleImage(blob) {
         const w = img.naturalWidth;
         const h = img.naturalHeight;
         const scale = Math.min(1, MAX_WIDTH / w, MAX_HEIGHT / h);
-        if (!w || !h || scale >= 1) {
+        // AVIF/WebP (what Chosun's image resizer serves to Chrome) came out of
+        // Joplin as a wall of base64 text instead of a picture, so those are
+        // always re-encoded to JPEG even when no downscaling is needed.
+        const needsConvert = /^image\/(avif|webp)$/i.test(blob.type);
+        if (!w || !h || (scale >= 1 && !needsConvert)) {
           URL.revokeObjectURL(url);
           resolve(blob);
           return;
@@ -612,6 +616,8 @@ function jcpDownscaleImage(blob) {
         canvas.width = Math.max(1, Math.round(w * scale));
         canvas.height = Math.max(1, Math.round(h * scale));
         const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff"; // JPEG has no alpha; transparent areas would turn black
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
         canvas.toBlob((outBlob) => resolve(outBlob || blob), "image/jpeg", 0.85);
