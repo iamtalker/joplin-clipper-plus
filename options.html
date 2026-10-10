@@ -14,6 +14,11 @@
   .ok { color: #1a7f37; }
   .err { color: #c62828; }
   .hint { font-size: 11px; color: #666; margin-top: 4px; }
+  .rule-row { border: 1px solid #ddd; border-radius: 6px; padding: 4px 10px 10px; margin-top: 10px; }
+  details.rules-help { font-size: 12px; margin-top: 8px; }
+  details.rules-help summary { cursor: pointer; font-weight: 600; }
+  details.rules-help code { background: #f3f3f3; padding: 0 3px; border-radius: 3px; }
+  details.rules-help ol { padding-left: 20px; }
 </style>
 </head>
 <body>
@@ -43,6 +48,11 @@
   <button id="test" class="secondary">Test connection</button>
   <div id="status"></div>
 
+  <h1 style="margin-top:28px">Site rules (optional)</h1>
+  <div class="hint" style="margin-top:-4px">If a site clips badly (menus, ads or comments come along, or the text is missing), you can tell the clipper which part of that site's page is the article. Your rules are used before the built-in ones.</div>
+  <div id="siteRules"></div>
+
+  <script src="site-rules.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

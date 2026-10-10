@@ -1124,10 +1124,39 @@ function jcpPageMeta() {
   };
 }
 
+// Rules the user added on the settings page (chrome.storage "siteRules":
+// [{host, content, remove}]). They win over the built-in tables above, so a
+// site the built-ins get wrong can be fixed without a new release. www. is
+// ignored on both sides; a selector that doesn't parse is skipped silently.
+async function jcpUserSiteRule() {
+  try {
+    const { siteRules } = await chrome.storage.local.get("siteRules");
+    if (!Array.isArray(siteRules)) return null;
+    const norm = (h) => String(h || "").trim().toLowerCase().replace(/^www\./, "");
+    const here = norm(location.hostname);
+    return siteRules.find((r) => r && r.content && norm(r.host) === here) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function jcpClipArticle() {
   const { doc: effectiveDoc, baseUrl } = jcpGetEffectiveDoc();
-  const overrideSelector = SITE_CONTENT_SELECTORS[location.hostname];
-  const overrideEls = overrideSelector ? Array.from(effectiveDoc.querySelectorAll(overrideSelector)) : [];
+  const userRule = await jcpUserSiteRule();
+  let overrideEls = [];
+  let usedUserRule = false;
+  if (userRule) {
+    try {
+      overrideEls = Array.from(effectiveDoc.querySelectorAll(userRule.content));
+      usedUserRule = overrideEls.length > 0;
+    } catch (e) {
+      overrideEls = [];
+    }
+  }
+  if (!overrideEls.length) {
+    const overrideSelector = SITE_CONTENT_SELECTORS[location.hostname];
+    overrideEls = overrideSelector ? Array.from(effectiveDoc.querySelectorAll(overrideSelector)) : [];
+  }
 
   let article;
   if (overrideEls.length) {
@@ -1144,6 +1173,13 @@ async function jcpClipArticle() {
     const cleanupSelectors = SITE_CLEANUP_SELECTORS[location.hostname];
     if (cleanupSelectors && cleanupSelectors.length) {
       container.querySelectorAll(cleanupSelectors.join(",")).forEach((el) => el.remove());
+    }
+    if (usedUserRule && userRule.remove) {
+      try {
+        container.querySelectorAll(userRule.remove).forEach((el) => el.remove());
+      } catch (e) {
+        // invalid selector in the user rule: keep the content as is
+      }
     }
     jcpApplyTitleLabels(container, SITE_LABEL_FROM_TITLE_SELECTORS[location.hostname]);
     article = { title: document.title, content: container.innerHTML, excerpt: "", byline: "" };

@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 FILES=(manifest.json background.js core.js content.js toolbar.js
-       popup.html popup.js options.html options.js icons lib)
+       popup.html popup.js options.html options.js site-rules.js icons lib)
 OUT_DIR="${1:-dist}"
 VER=$(grep -m1 '"version"' manifest.json | sed -E 's/.*"version": *"([^"]+)".*/\1/')
 mkdir -p "$OUT_DIR"
