@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Joplin Clipper Plus - Settings</title>
+<title>Joplin Clipper Plus - 설정</title>
 <style>
   body { font-family: -apple-system, Segoe UI, Arial, sans-serif; width: 420px; padding: 16px; color: #222; }
   h1 { font-size: 16px; margin: 0 0 12px; }
@@ -22,30 +22,30 @@
 </style>
 </head>
 <body>
-  <h1>Joplin Clipper Plus — Settings</h1>
+  <h1>Joplin Clipper Plus — 설정</h1>
 
-  <label for="port">Joplin Web Clipper port</label>
+  <label for="port">조플린 Web Clipper 포트</label>
   <input id="port" placeholder="41184" />
-  <div class="hint">Joplin desktop → Tools → Options → Web Clipper → make sure the service is enabled.</div>
+  <div class="hint">조플린 데스크톱 앱 → 도구 → 옵션 → Web Clipper → "Web Clipper 서비스 활성화"가 켜져 있는지 확인하세요.</div>
 
-  <label for="token">Authorization token</label>
-  <input id="token" type="password" autocomplete="off" placeholder="paste token from Joplin's Web Clipper options page" />
+  <label for="token">인증 토큰 (Authorization token)</label>
+  <input id="token" type="password" autocomplete="off" placeholder="조플린 Web Clipper 옵션 화면에 표시된 토큰을 붙여 넣으세요" />
 
-  <label for="defMode">Default clip mode</label>
+  <label for="defMode">기본 클리핑 방법</label>
   <select id="defMode">
-    <option value="article">📄 Article</option>
-    <option value="full">🖼 Full Page</option>
-    <option value="selection">✂️ Selection</option>
-    <option value="bookmark">🔖 Bookmark</option>
-    <option value="webtoon">📜 Webtoon (all big images)</option>
+    <option value="article">📄 Article (본문만)</option>
+    <option value="full">🖼 Full Page (전체 페이지)</option>
+    <option value="selection">✂️ Selection (선택 영역)</option>
+    <option value="bookmark">🔖 Bookmark (링크만)</option>
+    <option value="webtoon">📜 Webtoon (큰 이미지 전부)</option>
   </select>
 
-  <label for="defNotebook">Default notebook</label>
-  <select id="defNotebook"><option value="">(default notebook)</option></select>
-  <div class="hint">The popup opens with these already selected — click the icon, then just Clip. You can still change them in the popup each time. The notebook list needs the token above (Joplin must be running).</div>
+  <label for="defNotebook">기본 노트북</label>
+  <select id="defNotebook"><option value="">(조플린 기본 노트북)</option></select>
+  <div class="hint">팝업이 이 값으로 미리 선택된 채 열려서, 아이콘을 누르고 Clip만 누르면 저장됩니다. 팝업에서 그때그때 바꿀 수도 있습니다. 노트북 목록을 불러오려면 위의 토큰이 필요합니다(조플린이 실행 중이어야 합니다).</div>
 
-  <button id="save">Save</button>
-  <button id="test" class="secondary">Test connection</button>
+  <button id="save">저장</button>
+  <button id="test" class="secondary">연결 테스트</button>
   <div id="status"></div>
 
   <h1 style="margin-top:28px">사이트 규칙 (선택)</h1>

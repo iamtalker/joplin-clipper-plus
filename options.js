@@ -14,7 +14,7 @@ function setStatus(text, ok) {
 // kept as an extra option so saving the page doesn't silently drop it.
 function loadNotebooks(selected) {
   chrome.runtime.sendMessage({ type: "listFolders" }, (res) => {
-    notebookEl.innerHTML = '<option value="">(default notebook)</option>';
+    notebookEl.innerHTML = '<option value="">(조플린 기본 노트북)</option>';
     const folders = res && res.ok ? res.folders : [];
     folders
       .sort((a, b) => a.title.localeCompare(b.title))
@@ -27,7 +27,7 @@ function loadNotebooks(selected) {
     if (selected && !folders.some((f) => f.id === selected)) {
       const opt = document.createElement("option");
       opt.value = selected;
-      opt.textContent = "(saved notebook — Joplin not reachable)";
+      opt.textContent = "(저장된 노트북 — 조플린에 연결할 수 없음)";
       notebookEl.appendChild(opt);
     }
     notebookEl.value = selected || "";
@@ -51,16 +51,16 @@ function collect() {
 }
 
 document.getElementById("save").addEventListener("click", () => {
-  chrome.storage.local.set(collect(), () => setStatus("Saved.", true));
+  chrome.storage.local.set(collect(), () => setStatus("저장했습니다.", true));
 });
 
 document.getElementById("test").addEventListener("click", async () => {
   await chrome.storage.local.set(collect());
-  setStatus("Testing…");
+  setStatus("연결 확인 중…");
   chrome.runtime.sendMessage({ type: "testConnection" }, (res) => {
     if (res && res.ok) {
-      setStatus("Connected to Joplin ✓", true);
+      setStatus("조플린에 연결되었습니다 ✓", true);
       loadNotebooks(notebookEl.value); // token may have just been entered
-    } else setStatus("Failed: " + (res ? res.error : "no response"), false);
+    } else setStatus("실패: " + (res ? res.error : "응답 없음"), false);
   });
 });
