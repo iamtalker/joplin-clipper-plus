@@ -258,7 +258,7 @@
           saveBtn.disabled = false;
           return;
         }
-        setHint("저장했어요 ✓ 이제 이 사이트는 Article 모드에서 이 규칙으로 클리핑됩니다. 지우려면 확장 설정 화면의 '사이트 규칙'에서 삭제하세요.", "ok");
+        setHint("저장했어요 ✓ 이제 이 사이트는 Article 모드에서 이 규칙으로 클리핑됩니다. 지우려면 이 도구를 다시 열어 '이 사이트 규칙 삭제'를 누르세요.", "ok");
         delBtn.hidden = false;
         saveBtn.disabled = false;
       });
