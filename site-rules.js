@@ -1,91 +1,57 @@
 // Settings-page UI for user-defined site rules (shared with the Obsidian fork;
-// the host options.html just needs the #siteRules container, see below).
+// the host options.html just needs the #siteRules container).
 // Rules live in chrome.storage.local "siteRules": [{host, content, remove}],
-// read by content.js (jcpUserSiteRule) at clip time.
+// read by content.js (jcpUserSiteRule) at clip time and created by picker.js
+// (the "pick the area by clicking" tool). This page lists them, deletes them,
+// and imports/exports them as a plain text file.
+//
+// Text file format (hand-editable):
+//   # comment
+//   [www.example.com]
+//   content = h1.title, #articleBody
+//   remove = .ad, .share
 (function () {
   const root = document.getElementById("siteRules");
   if (!root) return;
 
   root.innerHTML = `
-    <p class="hint" style="font-size:12px"><b>더 쉬운 방법:</b> 잘 안 되는 사이트의 기사 페이지에서 확장 아이콘을 누르고 <b>🎯 이 사이트 영역 직접 고르기</b>를 누르세요. 페이지에서 클릭만 하면 아래 규칙이 자동으로 만들어집니다. 여기 목록에서 언제든 삭제·수정할 수 있습니다.</p>
-    <details class="rules-help">
-      <summary>셀렉터 찾는 법 (단계별 설명)</summary>
+    <details class="rules-help" open>
+      <summary>규칙은 어떻게 만드나요?</summary>
       <ol>
-        <li>클리핑이 잘 안 되는 기사 페이지를 엽니다.</li>
-        <li><b>F12</b>를 눌러 개발자 도구를 열고, 도구 왼쪽 위의 <b>화살표 아이콘(요소 선택)</b>을 누릅니다.</li>
-        <li>페이지에서 <b>기사 본문</b>을 클릭합니다. 도구 안에서 한 줄이 파랗게 선택됩니다.</li>
-        <li>선택된 줄을 마우스 오른쪽 버튼 → <b>Copy</b> → <b>Copy selector</b>.</li>
-        <li>아래 <b>본문 셀렉터</b>에 붙여 넣고, <b>사이트 주소</b>에는 주소창의 사이트 주소(예: <code>www.example.com</code>)를 적습니다.</li>
-        <li>선택: 본문 안에 광고·공유 버튼 같은 게 남아 있으면 같은 방법으로 그 요소의 셀렉터를 복사해 <b>제거할 요소</b>에 붙여 넣습니다.</li>
-        <li><b>규칙 저장</b>을 누르고 페이지를 다시 클리핑합니다.</li>
+        <li>클리핑이 잘 안 되는 기사 페이지에서 확장 아이콘을 누릅니다.</li>
+        <li><b>🎯 이 사이트 영역 직접 고르기</b>를 누릅니다.</li>
+        <li>페이지에서 넣을 부분(제목·본문 등)을 클릭합니다. 광고처럼 지울 것은 <b>🗑 지울 영역</b> 탭에서 클릭합니다.</li>
+        <li><b>💾 저장</b>을 누르면 이 사이트의 규칙으로 저장되고, 아래 목록에 나타납니다.</li>
       </ol>
-      <p><b>빠진 내용을 추가하고 싶을 때</b>: <b>본문 셀렉터</b> 칸이 곧 "클리핑에 넣을 영역" 목록입니다. 제목·부제·기자·날짜처럼 본문 바깥에 있어서 빠진 부분이 있으면, 그 부분의 셀렉터도 같은 방법으로 복사해 쉼표로 이어 붙이세요: <code>.title, .subtitle, #articleBody</code> (페이지에 나온 순서대로 들어갑니다). <b>제거할 요소</b> 칸은 반대로, 들어온 것 중 지울 것만 적는 칸입니다.</p>
-      <p>팁: <code>div:nth-child(…)</code>처럼 긴 것보다 <code>#id</code>나 알아볼 수 있는 <code>.class</code>가 들어간 짧은 셀렉터가 오래 갑니다. 여러 개는 쉼표로 구분합니다.</p>
-    </details>
-    <details class="rules-help">
-      <summary>English instructions</summary>
-      <ol>
-        <li>Open the article page that clips badly.</li>
-        <li>Press <b>F12</b> (developer tools), then click the small <b>arrow-in-a-square</b> icon at the top-left of the tools panel.</li>
-        <li>Click the <b>article text</b> on the page. A line gets highlighted in the tools panel.</li>
-        <li>Right-click that highlighted line → <b>Copy</b> → <b>Copy selector</b>.</li>
-        <li>Paste it into the <b>본문 셀렉터</b> field (content selector) below, and put the site address (e.g. <code>www.example.com</code>) in <b>사이트 주소</b> (site).</li>
-        <li>Optional: if some junk (ads, share buttons) is still inside, do the same on that junk and paste its selector into <b>제거할 요소</b> (remove).</li>
-        <li>Press <b>규칙 저장</b> (Save rules), then clip the page again.</li>
-      </ol>
-      <p>To <b>add</b> something that is missing (title, subtitle, reporter, date …): the content selector field is the list of everything to include. Copy the missing part's selector too and join them with commas: <code>.title, .subtitle, #articleBody</code> (kept in page order). The remove field is only for deleting things that came along.</p>
-      <p>Tips: a short selector with an <code>#id</code> or a clear <code>.class</code> lasts longer than a long <code>div:nth-child(…)</code> chain. Separate several selectors with commas.</p>
+      <p>규칙을 다른 컴퓨터로 옮기거나 백업하려면 <b>내보내기</b>로 텍스트 파일을 만들고, 다른 곳에서 <b>불러오기</b>를 누르세요. 파일은 메모장으로 직접 고칠 수도 있습니다. 형식은 이렇습니다:</p>
+      <pre>[www.example.com]
+content = h1.title, #articleBody
+remove = .ad, .share</pre>
+      <p><code>content</code>는 클리핑에 넣을 영역, <code>remove</code>는 그 안에서 지울 영역(선택)의 CSS 셀렉터입니다. <code>#</code>으로 시작하는 줄은 설명입니다.</p>
     </details>
     <div id="rulesList"></div>
-    <button type="button" id="addRule" class="secondary" style="margin-left:0">+ 규칙 추가</button>
-    <button type="button" id="saveRules">규칙 저장</button>
+    <div class="rules-actions">
+      <button type="button" id="exportRules" class="secondary" style="margin-left:0">⬇ 내보내기 (텍스트 파일)</button>
+      <button type="button" id="importRules" class="secondary">⬆ 불러오기</button>
+      <input type="file" id="importFile" accept=".txt,text/plain" hidden />
+    </div>
     <div id="rulesStatus" class="hint"></div>
   `;
 
   const listEl = document.getElementById("rulesList");
   const statusEl = document.getElementById("rulesStatus");
+  const fileEl = document.getElementById("importFile");
 
-  function setStatus(text, ok) {
-    statusEl.textContent = text;
-    statusEl.style.color = ok ? "#1a7f37" : ok === false ? "#c62828" : "";
-  }
-
-  function addRow(rule) {
-    const row = document.createElement("div");
-    row.className = "rule-row";
-    const mk = (cls, label, ph, val) => {
-      const wrap = document.createElement("label");
-      wrap.textContent = label;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = cls;
-      input.placeholder = ph;
-      input.value = val || "";
-      wrap.appendChild(input);
-      return wrap;
-    };
-    row.appendChild(mk("r-host", "사이트 주소", "www.example.com", rule.host));
-    row.appendChild(mk("r-content", "본문 셀렉터 = 클리핑에 포함할 영역 (제목, 본문 …)", "h1.title, #articleBody", rule.content));
-    row.appendChild(mk("r-remove", "제거할 요소 (선택)", ".ad, .share-buttons", rule.remove));
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "secondary";
-    del.style.marginLeft = "0";
-    del.textContent = "삭제";
-    del.addEventListener("click", () => {
-      row.remove();
-      persist("규칙을 삭제했습니다.");
-    });
-    row.appendChild(del);
-    listEl.appendChild(row);
-  }
-
-  function normHost(h) {
-    return String(h || "")
+  const normHost = (h) =>
+    String(h || "")
       .trim()
       .toLowerCase()
       .replace(/^https?:\/\//, "")
       .replace(/\/.*$/, "");
+
+  function setStatus(text, ok) {
+    statusEl.textContent = text;
+    statusEl.style.color = ok ? "#1a7f37" : ok === false ? "#c62828" : "";
   }
 
   function validSelector(sel) {
@@ -97,29 +63,146 @@
     }
   }
 
-  document.getElementById("addRule").addEventListener("click", () => addRow({}));
-
-  // Validates every row and writes them all; used by the save button and by
-  // Delete (so a deleted rule is really gone without pressing save).
-  function persist(okMessage) {
-    const rules = [];
-    for (const row of listEl.querySelectorAll(".rule-row")) {
-      const host = normHost(row.querySelector(".r-host").value);
-      const content = row.querySelector(".r-content").value.trim();
-      const remove = row.querySelector(".r-remove").value.trim();
-      if (!host && !content && !remove) continue; // blank row
-      if (!host || !content) return setStatus("각 규칙에는 사이트 주소와 본문 셀렉터가 필요합니다.", false);
-      if (!validSelector(content)) return setStatus(`${host}: 본문 셀렉터 형식이 올바르지 않습니다 → ${content}`, false);
-      if (remove && !validSelector(remove)) return setStatus(`${host}: 제거할 요소 셀렉터 형식이 올바르지 않습니다 → ${remove}`, false);
-      rules.push({ host, content, remove });
-    }
-    chrome.storage.local.set({ siteRules: rules }, () => setStatus(okMessage || `규칙 ${rules.length}개를 저장했습니다.`, true));
+  function getRules(cb) {
+    chrome.storage.local.get("siteRules", (data) => {
+      cb(Array.isArray(data.siteRules) ? data.siteRules.filter((r) => r && r.host && r.content) : []);
+    });
   }
-  document.getElementById("saveRules").addEventListener("click", () => persist());
 
-  chrome.storage.local.get("siteRules", (data) => {
-    const rules = Array.isArray(data.siteRules) ? data.siteRules : [];
-    rules.forEach(addRow);
-    if (!rules.length) addRow({});
+  function render(rules) {
+    listEl.innerHTML = "";
+    if (!rules.length) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = "아직 저장된 규칙이 없습니다.";
+      listEl.appendChild(empty);
+      return;
+    }
+    rules.forEach((rule) => {
+      const row = document.createElement("div");
+      row.className = "rule-row";
+      const host = document.createElement("div");
+      host.style.cssText = "font-weight:600;margin-top:6px;word-break:break-all";
+      host.textContent = rule.host;
+      const mk = (label, value) => {
+        const d = document.createElement("div");
+        d.className = "hint";
+        d.style.wordBreak = "break-all";
+        d.textContent = `${label}: ${value}`;
+        return d;
+      };
+      row.appendChild(host);
+      row.appendChild(mk("넣을 영역", rule.content));
+      if (rule.remove) row.appendChild(mk("지울 영역", rule.remove));
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "secondary";
+      del.style.marginLeft = "0";
+      del.textContent = "삭제";
+      del.addEventListener("click", () => {
+        getRules((cur) => {
+          const next = cur.filter((r) => normHost(r.host) !== normHost(rule.host));
+          chrome.storage.local.set({ siteRules: next }, () => {
+            render(next);
+            setStatus(`${rule.host} 규칙을 삭제했습니다.`, true);
+          });
+        });
+      });
+      row.appendChild(del);
+      listEl.appendChild(row);
+    });
+  }
+
+  // ---- text format ----
+  function serialize(rules) {
+    const lines = [
+      "# Clipper site rules - [site] / content = what to clip / remove = what to drop (optional)",
+      "# Edit freely. Import merges by site: an imported site replaces the one saved here.",
+      "",
+    ];
+    rules.forEach((r) => {
+      lines.push(`[${r.host}]`, `content = ${r.content}`);
+      if (r.remove) lines.push(`remove = ${r.remove}`);
+      lines.push("");
+    });
+    return lines.join("\n");
+  }
+
+  // Returns { rules, errors }.
+  function parse(text) {
+    const rules = [];
+    const errors = [];
+    let cur = null;
+    const flush = () => {
+      if (!cur) return;
+      if (!cur.content) errors.push(`${cur.host}: content 줄이 없어 건너뜀`);
+      else if (!validSelector(cur.content)) errors.push(`${cur.host}: content 셀렉터가 올바르지 않아 건너뜀`);
+      else if (cur.remove && !validSelector(cur.remove)) errors.push(`${cur.host}: remove 셀렉터가 올바르지 않아 건너뜀`);
+      else rules.push({ host: cur.host, content: cur.content, remove: cur.remove || "" });
+      cur = null;
+    };
+    text
+      .replace(/^﻿/, "")
+      .split(/\r?\n/)
+      .forEach((raw, i) => {
+        const line = raw.trim();
+        if (!line || line.startsWith("#")) return;
+        const h = line.match(/^\[(.+)\]$/);
+        if (h) {
+          flush();
+          const host = normHost(h[1]);
+          if (host) cur = { host, content: "", remove: "" };
+          else errors.push(`${i + 1}번째 줄: 사이트 주소가 비어 있음`);
+          return;
+        }
+        const kv = line.match(/^(content|remove)\s*=\s*(.*)$/i);
+        if (kv && cur) cur[kv[1].toLowerCase()] = kv[2].trim();
+        else errors.push(`${i + 1}번째 줄을 이해하지 못해 건너뜀: ${line.slice(0, 40)}`);
+      });
+    flush();
+    return { rules, errors };
+  }
+
+  // ---- buttons ----
+  document.getElementById("exportRules").addEventListener("click", () => {
+    getRules((rules) => {
+      if (!rules.length) return setStatus("내보낼 규칙이 없습니다.", false);
+      const blob = new Blob([serialize(rules)], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "clipper-site-rules.txt";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      setStatus(`규칙 ${rules.length}개를 내보냈습니다.`, true);
+    });
   });
+
+  document.getElementById("importRules").addEventListener("click", () => fileEl.click());
+  fileEl.addEventListener("change", () => {
+    const file = fileEl.files && fileEl.files[0];
+    if (!file) return;
+    file.text().then((text) => {
+      fileEl.value = "";
+      const { rules: incoming, errors } = parse(text);
+      if (!incoming.length) {
+        return setStatus("불러올 규칙이 없습니다." + (errors.length ? " " + errors[0] : ""), false);
+      }
+      getRules((cur) => {
+        const incomingHosts = new Set(incoming.map((r) => normHost(r.host)));
+        const kept = cur.filter((r) => !incomingHosts.has(normHost(r.host)));
+        const next = kept.concat(incoming);
+        chrome.storage.local.set({ siteRules: next }, () => {
+          render(next);
+          setStatus(
+            `규칙 ${incoming.length}개를 불러왔습니다.` + (errors.length ? ` (건너뜀 ${errors.length}건: ${errors[0]})` : ""),
+            true
+          );
+        });
+      });
+    });
+  });
+
+  getRules(render);
 })();
