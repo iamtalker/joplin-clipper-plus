@@ -211,10 +211,31 @@
     });
   }
 
+  // On a wide window the settings column is narrow and the right side is
+  // empty, so the editor fills that space (full height); on a narrow window
+  // it opens inline below the button instead.
+  function layoutEditor() {
+    if (editorEl.hidden) return;
+    if (window.innerWidth >= 900) {
+      editorEl.style.cssText =
+        "position:fixed;top:16px;bottom:16px;left:500px;right:16px;display:flex;flex-direction:column;background:#fff;z-index:5;";
+      textEl.style.height = "auto";
+      textEl.style.flex = "1";
+      textEl.style.marginTop = "0";
+    } else {
+      editorEl.style.cssText = "";
+      textEl.style.flex = "";
+      textEl.style.height = "340px";
+      textEl.style.marginTop = "10px";
+    }
+  }
+  window.addEventListener("resize", layoutEditor);
+
   document.getElementById("editRules").addEventListener("click", () => {
     getRules((rules) => {
       textEl.value = serialize(rules);
       editorEl.hidden = false;
+      layoutEditor();
       setStatus("");
       textEl.focus();
       textEl.scrollTop = textEl.scrollHeight; // rules sit below the explanation
@@ -223,6 +244,7 @@
   document.getElementById("saveText").addEventListener("click", () => applyText(textEl.value, "저장"));
   document.getElementById("closeText").addEventListener("click", () => {
     editorEl.hidden = true;
+    editorEl.style.cssText = "";
     setStatus("");
   });
 
