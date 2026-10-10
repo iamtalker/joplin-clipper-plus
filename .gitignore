@@ -1,3 +1,4 @@
 *.zip
 README_no_emoji.txt
 forum_post_draft.txt
+dist/

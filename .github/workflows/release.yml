@@ -18,8 +18,13 @@ jobs:
         run: |
           git archive --format=zip --prefix=joplin-clipper/ -o "joplin-clipper-${GITHUB_REF_NAME}.zip" HEAD
 
+      - name: Build Chrome Web Store zip
+        run: bash scripts/make-store-zip.sh dist
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: joplin-clipper-${{ github.ref_name }}.zip
+          files: |
+            joplin-clipper-${{ github.ref_name }}.zip
+            dist/joplin-clipper-plus-store-*.zip
           generate_release_notes: true
