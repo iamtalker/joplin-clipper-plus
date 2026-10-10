@@ -101,14 +101,15 @@
   }
 
   const KEYS = {
-    "사이트 주소": "host",
+    // Keys are compared without spaces, so "추가할것" and "추가할 것" both work.
+    사이트주소: "host",
     사이트: "host",
     host: "host",
     site: "host",
-    "추가할 것": "content",
+    추가할것: "content",
     추가: "content",
     content: "content",
-    "삭제할 것": "remove",
+    삭제할것: "remove",
     삭제: "remove",
     remove: "remove",
   };
@@ -141,7 +142,7 @@
         const h = line.match(/^\[(.+)\]$/);
         if (h) return startRule(h[1], i + 1);
         const kv = line.match(/^([^:=]+?)\s*[:=]\s*(.*)$/);
-        const key = kv && KEYS[kv[1].trim().toLowerCase()];
+        const key = kv && KEYS[kv[1].replace(/\s+/g, "").toLowerCase()];
         if (!key) return errors.push(`${i + 1}번째 줄을 이해하지 못해 건너뜀: ${line.slice(0, 40)}`);
         if (key === "host") return startRule(kv[2], i + 1);
         if (cur) cur[key] = kv[2].trim();
