@@ -23,7 +23,7 @@
 - 핵심 교훈: 스크린샷 이어붙이기는 이음매 문제가 끝내 남았고, 사용자 제안("그냥 다운받아서 넣자")이 정답이었음. MV3에서 content script의 fetch는 페이지 CORS를 따르지만 **서비스 워커는 host_permissions가 있으면 CORS 무시**.
 
 ## 3. ⚠ 알아둘 것 / 미해결
-- **스토어 zip**: `bash scripts/make-store-zip.sh` → `dist/joplin-clipper-plus-store-vX.Y.Z.zip`(manifest.json이 zip 맨 바깥, 필요한 파일만). 태그 푸시 시 GitHub 릴리스에도 `joplin-clipper-plus-store-*.zip`으로 자동 첨부됨(릴리스의 `joplin-clipper-vX.Y.Z.zip`은 레포 전체라 스토어용 아님).
+- **스토어 zip**: `bash scripts/make-store-zip.sh` → `dist/joplin-clipper-plus-store-vX.Y.Z.zip`(manifest.json이 zip 맨 바깥, 필요한 파일만). 태그 푸시 시 GitHub 릴리스의 `joplin-clipper-vX.Y.Z.zip`이 바로 이 스토어용 zip(폴더 없이 manifest.json이 맨 바깥)이라 그대로 업로드 가능.
 - **권한(스토어)**: v0.39.1에서 `debugger` 권한을 **제거**함(웹툰 모드 3순위 대체 수단이었는데, 사용자가 "당연히 빼야지"라고 결정. 지금은 스크롤 화면 캡처로 대체). 남은 민감 권한은 `host_permissions: <all_urls>`(백그라운드에서 이미지 원본 받기용) 하나. 스토어 제출 때 쓴 사유 문구: "이미지 CDN이 페이지의 이미지 읽기를 막는 경우가 많아, 사용자가 Clip을 누른 순간 그 페이지 이미지만 원래 주소에서 받아옴. 클리핑 대상 사이트를 미리 알 수 없어 전체 사이트 권한이 필요. 수집·전송 없음, 로컬 조플린으로만 보냄". 2026-10-02 사용자가 v0.39.x로 스토어 재제출 진행 중(승인본은 0.25).
 - 웹툰 모드는 "큰 이미지"(렌더링 폭≥300, 높이≥150)를 휴리스틱으로 고름. 광고 배너가 섞이는 사이트는 `SITE_CONTENT_SELECTORS`에 본문 영역 지정 필요.
 - 더쿠(theqoo) 지원은 구조 분석만으로 적용(테스트 환경에서 이미지 로딩 안 돼 캡처 실검증 못 함) — 사용자 피드백 대기.

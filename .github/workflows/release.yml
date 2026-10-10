@@ -14,17 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Only the files the extension needs, manifest.json at the zip root —
+      # the same file works for the Chrome Web Store upload and for
+      # "Load unpacked" after unzipping.
       - name: Build extension zip
         run: |
-          git archive --format=zip --prefix=joplin-clipper/ -o "joplin-clipper-${GITHUB_REF_NAME}.zip" HEAD
-
-      - name: Build Chrome Web Store zip
-        run: bash scripts/make-store-zip.sh dist
+          bash scripts/make-store-zip.sh dist
+          cp dist/joplin-clipper-plus-store-*.zip "joplin-clipper-${GITHUB_REF_NAME}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            joplin-clipper-${{ github.ref_name }}.zip
-            dist/joplin-clipper-plus-store-*.zip
+          files: joplin-clipper-${{ github.ref_name }}.zip
           generate_release_notes: true
