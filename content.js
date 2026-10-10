@@ -103,6 +103,10 @@ const SITE_CONTENT_SELECTORS = {
   // article-body section are all that is wanted; ad slots (.arcad-wrapper)
   // sit between paragraphs.
   "www.chosun.com": ".article-header__headline, section.article-body",
+  // Naver News: headline, reporter + timestamp, and the article body (#dic_area).
+  // Readability drops the lazy-loaded photos here (their <img> sits in a
+  // display:none wrapper until Naver's own script reveals it).
+  "n.news.naver.com": "#title_area, .media_end_head_journalist_name, .media_end_head_info_datestamp_time, #dic_area",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -281,6 +285,9 @@ const SITE_CLEANUP_SELECTORS = {
   "bbs.ruliweb.com": [".reply_count", ".rv-video-control-panel"],
   "www.mt.co.kr": [".article_ads", ".ad-tag"],
   "www.chosun.com": [".arcad-wrapper"],
+  // Video player chrome (empty shell + control labels once Naver's script runs)
+  // and the .mask overlay spans that sit next to every photo.
+  "n.news.naver.com": [".vod_player_wrap", ".mask"],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
@@ -952,6 +959,12 @@ async function jcpInlineImages(root, baseUrl) {
       }
     }
 
+    if (!dataUrls && r.abs && !r.img.getAttribute("src")) {
+      // Lazy-load markup (src only in data-src): nothing could be inlined, but keep the
+      // photo as a remote link rather than dropping it — Turndown skips <img> without src.
+      r.img.setAttribute("src", r.abs);
+    }
+
     if (dataUrls && dataUrls.length === 1) {
       r.img.setAttribute("src", dataUrls[0]);
       r.img.removeAttribute("srcset");
@@ -1115,7 +1128,13 @@ async function jcpClipArticle() {
   let article;
   if (overrideEls.length) {
     const container = document.createElement("div");
-    overrideEls.forEach((el) => container.appendChild(el.cloneNode(true)));
+    // Each match in its own block: inline matches (a reporter name span, a
+    // timestamp span) would otherwise run together on a single line.
+    overrideEls.forEach((el) => {
+      const wrap = document.createElement("div");
+      wrap.appendChild(el.cloneNode(true));
+      container.appendChild(wrap);
+    });
     jcpAbsolutize(container, baseUrl);
     jcpStripNonContentTags(container);
     const cleanupSelectors = SITE_CLEANUP_SELECTORS[location.hostname];
