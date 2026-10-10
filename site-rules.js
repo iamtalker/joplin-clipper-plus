@@ -18,7 +18,7 @@
         <li>선택: 본문 안에 광고·공유 버튼 같은 게 남아 있으면 같은 방법으로 그 요소의 셀렉터를 복사해 <b>제거할 요소</b>에 붙여 넣습니다.</li>
         <li><b>규칙 저장</b>을 누르고 페이지를 다시 클리핑합니다.</li>
       </ol>
-      <p>제목은 보통 본문 바깥에 있습니다. 제목도 넣으려면 제목의 셀렉터를 복사해 쉼표로 이어 붙이세요: <code>h1.title, #articleBody</code></p>
+      <p><b>빠진 내용을 추가하고 싶을 때</b>: <b>본문 셀렉터</b> 칸이 곧 "클리핑에 넣을 영역" 목록입니다. 제목·부제·기자·날짜처럼 본문 바깥에 있어서 빠진 부분이 있으면, 그 부분의 셀렉터도 같은 방법으로 복사해 쉼표로 이어 붙이세요: <code>.title, .subtitle, #articleBody</code> (페이지에 나온 순서대로 들어갑니다). <b>제거할 요소</b> 칸은 반대로, 들어온 것 중 지울 것만 적는 칸입니다.</p>
       <p>팁: <code>div:nth-child(…)</code>처럼 긴 것보다 <code>#id</code>나 알아볼 수 있는 <code>.class</code>가 들어간 짧은 셀렉터가 오래 갑니다. 여러 개는 쉼표로 구분합니다.</p>
     </details>
     <details class="rules-help">
@@ -32,7 +32,7 @@
         <li>Optional: if some junk (ads, share buttons) is still inside, do the same on that junk and paste its selector into <b>제거할 요소</b> (remove).</li>
         <li>Press <b>규칙 저장</b> (Save rules), then clip the page again.</li>
       </ol>
-      <p>The title is usually outside the text block. To include it, copy its selector too and join them with a comma: <code>h1.title, #articleBody</code>.</p>
+      <p>To <b>add</b> something that is missing (title, subtitle, reporter, date …): the content selector field is the list of everything to include. Copy the missing part's selector too and join them with commas: <code>.title, .subtitle, #articleBody</code> (kept in page order). The remove field is only for deleting things that came along.</p>
       <p>Tips: a short selector with an <code>#id</code> or a clear <code>.class</code> lasts longer than a long <code>div:nth-child(…)</code> chain. Separate several selectors with commas.</p>
     </details>
     <div id="rulesList"></div>
@@ -64,7 +64,7 @@
       return wrap;
     };
     row.appendChild(mk("r-host", "사이트 주소", "www.example.com", rule.host));
-    row.appendChild(mk("r-content", "본문 셀렉터 (제목, 본문 …)", "h1.title, #articleBody", rule.content));
+    row.appendChild(mk("r-content", "본문 셀렉터 = 클리핑에 포함할 영역 (제목, 본문 …)", "h1.title, #articleBody", rule.content));
     row.appendChild(mk("r-remove", "제거할 요소 (선택)", ".ad, .share-buttons", rule.remove));
     const del = document.createElement("button");
     del.type = "button";

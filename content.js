@@ -57,7 +57,11 @@ const SITE_CONTENT_SELECTORS = {
   // Readability was pulling in Inven's gamification widget (#inventory-skin-*,
   // a user-inventory/badge display, ~2800 chars) and a recommend-button block
   // alongside the actual post.
-  "www.inven.co.kr": ".articleTitle h1, #powerbbsContent",
+  // Board posts use .articleTitle/#powerbbsContent; the webzine news layout
+  // (/webzine/news/) has its own hero header (title, subtitle, reporter, date)
+  // and the article body in #imageCollectDiv. Listing both works: whichever
+  // exist on the page are kept, in document order.
+  "www.inven.co.kr": ".articleTitle h1, #powerbbsContent, .news-hero__title, .news-hero__subtitle, .news-hero__reporter-line, .news-hero__date, #imageCollectDiv",
   // Uses the Froala editor; the whole post (with the real body wrapped in
   // .article-body) also sits inside <article> alongside a huge
   // .included-article-list (board post table) and a right sidebar — but
