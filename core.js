@@ -154,6 +154,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["toolbar.js"] });
         sendResponse({ ok: true, hasSelection: false });
+      } else if (msg.type === "startPicker") {
+        // Popup asks for the in-page "pick the article area" tool (picker.js).
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["picker.js"] });
+        sendResponse({ ok: true });
       } else if (msg.type === "clipSelectionFromToolbar") {
         sendResponse(await clipAndSave(sender.tab.id, "selection", msg));
       } else if (msg.type === "captureImageRect") {

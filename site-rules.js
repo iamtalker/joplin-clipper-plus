@@ -7,7 +7,8 @@
   if (!root) return;
 
   root.innerHTML = `
-    <details class="rules-help" open>
+    <p class="hint" style="font-size:12px"><b>더 쉬운 방법:</b> 잘 안 되는 사이트의 기사 페이지에서 확장 아이콘을 누르고 <b>🎯 이 사이트 영역 직접 고르기</b>를 누르세요. 페이지에서 클릭만 하면 아래 규칙이 자동으로 만들어집니다. 여기 목록에서 언제든 삭제·수정할 수 있습니다.</p>
+    <details class="rules-help">
       <summary>셀렉터 찾는 법 (단계별 설명)</summary>
       <ol>
         <li>클리핑이 잘 안 되는 기사 페이지를 엽니다.</li>
@@ -71,7 +72,10 @@
     del.className = "secondary";
     del.style.marginLeft = "0";
     del.textContent = "삭제";
-    del.addEventListener("click", () => row.remove());
+    del.addEventListener("click", () => {
+      row.remove();
+      persist("규칙을 삭제했습니다.");
+    });
     row.appendChild(del);
     listEl.appendChild(row);
   }
@@ -95,7 +99,9 @@
 
   document.getElementById("addRule").addEventListener("click", () => addRow({}));
 
-  document.getElementById("saveRules").addEventListener("click", () => {
+  // Validates every row and writes them all; used by the save button and by
+  // Delete (so a deleted rule is really gone without pressing save).
+  function persist(okMessage) {
     const rules = [];
     for (const row of listEl.querySelectorAll(".rule-row")) {
       const host = normHost(row.querySelector(".r-host").value);
@@ -107,8 +113,9 @@
       if (remove && !validSelector(remove)) return setStatus(`${host}: 제거할 요소 셀렉터 형식이 올바르지 않습니다 → ${remove}`, false);
       rules.push({ host, content, remove });
     }
-    chrome.storage.local.set({ siteRules: rules }, () => setStatus(`규칙 ${rules.length}개를 저장했습니다.`, true));
-  });
+    chrome.storage.local.set({ siteRules: rules }, () => setStatus(okMessage || `규칙 ${rules.length}개를 저장했습니다.`, true));
+  }
+  document.getElementById("saveRules").addEventListener("click", () => persist());
 
   chrome.storage.local.get("siteRules", (data) => {
     const rules = Array.isArray(data.siteRules) ? data.siteRules : [];

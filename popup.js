@@ -56,6 +56,18 @@ function startSelection(onHasSelection) {
   );
 }
 
+// Hands off to the in-page picker (picker.js) so the user can click the parts
+// of this site to clip instead of writing selectors; the popup closes.
+const pickBtn = document.getElementById("pickArea");
+if (pickBtn) {
+  pickBtn.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "startPicker" }, (res) => {
+      if (!res || !res.ok) setStatus((res && res.error) || "Unknown error", "err");
+      else window.close();
+    });
+  });
+}
+
 document.getElementById("settingsLink").addEventListener("click", () => {
   chrome.runtime.openOptionsPage();
 });

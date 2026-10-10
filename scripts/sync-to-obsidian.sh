@@ -7,7 +7,7 @@
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 DST="${1:-$SRC/../obsidian-clipper-plus}"
-SHARED=(content.js core.js toolbar.js popup.js site-rules.js lib/Readability.js lib/turndown.js lib/turndown-plugin-gfm.js)
+SHARED=(content.js core.js toolbar.js popup.js site-rules.js picker.js lib/Readability.js lib/turndown.js lib/turndown-plugin-gfm.js)
 [ -d "$DST" ] || { echo "not found: $DST" >&2; exit 1; }
 mkdir -p "$DST/lib"
 for f in "${SHARED[@]}"; do cp "$SRC/$f" "$DST/$f"; done

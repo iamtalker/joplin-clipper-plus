@@ -17,6 +17,7 @@
   .ok { color: #1a7f37; }
   .err { color: #c62828; }
   #settingsLink { font-size: 11px; color: #1a73e8; cursor: pointer; text-decoration: underline; margin-left: auto; }
+  .pick { width: 100%; margin-bottom: 4px; padding: 7px; font-size: 12px; border: 1px dashed #999; border-radius: 6px; background: #fff; color: #333; cursor: pointer; }
   #version { font-size: 10px; color: #999; font-weight: 400; }
 </style>
 </head>
@@ -30,6 +31,8 @@
     <button data-mode="bookmark">🔖 Bookmark</button>
     <button data-mode="webtoon" style="grid-column: 1 / -1">📜 Webtoon (all big images)</button>
   </div>
+
+  <button id="pickArea" class="pick" title="클리핑이 잘 안 되는 사이트에서, 기사 영역을 직접 클릭해서 알려줍니다">🎯 이 사이트 영역 직접 고르기</button>
 
   <label for="title">Title</label>
   <input id="title" />
