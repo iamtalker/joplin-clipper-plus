@@ -107,6 +107,9 @@ const SITE_CONTENT_SELECTORS = {
   // Readability drops the lazy-loaded photos here (their <img> sits in a
   // display:none wrapper until Naver's own script reveals it).
   "n.news.naver.com": "#title_area, .media_end_head_journalist_name, .media_end_head_info_datestamp_time, #dic_area",
+  // OhmyTV video pages: the YouTube embed (.vod) sits outside the .view-wrap
+  // that holds the title and description, so all three are listed.
+  "www.ohmynews.com": ".view_title, .vod, .txt_view",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -288,6 +291,7 @@ const SITE_CLEANUP_SELECTORS = {
   // Video player chrome (empty shell + control labels once Naver's script runs)
   // and the .mask overlay spans that sit next to every photo.
   "n.news.naver.com": [".vod_player_wrap", ".mask"],
+  "www.ohmynews.com": [".tag_txt"],
 };
 
 // Icon+number counters (comment/like buttons etc.) whose real label lives in
