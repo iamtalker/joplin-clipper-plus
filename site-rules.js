@@ -2,10 +2,11 @@
 // the host options.html just needs the #siteRules container).
 // Rules live in chrome.storage.local "siteRules": [{host, content, remove}],
 // read by content.js (jcpUserSiteRule) at clip time and created by picker.js
-// (the "pick the area by clicking" tool). The page itself only has export /
-// import buttons; the text file is the editor (and its header explains it),
-// and importing REPLACES the saved rules with the file's contents, so
-// deleting a rule = deleting its block from the file and importing it.
+// (the "pick the area by clicking" tool). The page has a single "edit rules"
+// button that opens a text box holding the rules as text (the header comments
+// explain the format); saving REPLACES the stored rules with the text, so
+// deleting a rule = deleting its lines. Export/import of the same text as a
+// file stays below the box for backups.
 //
 // File format:
 //   # comment
@@ -18,16 +19,25 @@
   if (!root) return;
 
   root.innerHTML = `
-    <div class="rules-actions">
-      <button type="button" id="exportRules" class="secondary" style="margin-left:0">⬇ 내보내기</button>
-      <button type="button" id="importRules" class="secondary">⬆ 불러오기</button>
-      <input type="file" id="importFile" accept=".txt,text/plain" hidden />
+    <button type="button" id="editRules" style="margin-top:6px">✏️ 규칙 편집</button>
+    <div id="editor" hidden>
+      <textarea id="rulesText" spellcheck="false" wrap="off"
+        style="width:100%;box-sizing:border-box;height:340px;margin-top:10px;padding:8px;font:12px/1.5 Consolas,'Courier New',monospace;border:1px solid #ccc;border-radius:4px;white-space:pre;"></textarea>
+      <div>
+        <button type="button" id="saveText">저장</button>
+        <button type="button" id="closeText" class="secondary">닫기</button>
+        <button type="button" id="exportRules" class="secondary">⬇ 파일로 내보내기</button>
+        <button type="button" id="importRules" class="secondary">⬆ 파일에서 불러오기</button>
+        <input type="file" id="importFile" accept=".txt,text/plain" hidden />
+      </div>
     </div>
     <div id="rulesStatus" class="hint"></div>
   `;
 
   const statusEl = document.getElementById("rulesStatus");
   const fileEl = document.getElementById("importFile");
+  const editorEl = document.getElementById("editor");
+  const textEl = document.getElementById("rulesText");
 
   const normHost = (h) =>
     String(h || "")
@@ -97,7 +107,7 @@
     rules.forEach((r) => {
       lines.push(`사이트 주소: ${r.host}`, `추가할 것: ${r.content}`, `삭제할 것: ${r.remove || ""}`, "");
     });
-    return lines.join("\r\n");
+    return lines.join("\n");
   }
 
   const KEYS = {
@@ -158,7 +168,8 @@
   // ---- buttons ----
   document.getElementById("exportRules").addEventListener("click", () => {
     getRules((rules) => {
-      const blob = new Blob([serialize(rules)], { type: "text/plain;charset=utf-8" });
+      // CRLF so the exported file opens properly in Notepad.
+      const blob = new Blob([serialize(rules).replace(/\n/g, "\r\n")], { type: "text/plain;charset=utf-8" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = "clipper-site-rules.txt";
@@ -170,31 +181,58 @@
     });
   });
 
+  // Replaces the stored rules with the rules described by `text` (the editor
+  // box or an imported file). Rules missing from the text are deleted, after
+  // a confirmation that lists them.
+  function applyText(text, verb, then) {
+    const { rules: incoming, errors } = parse(text);
+    const hasContent = text.split(/\r?\n/).some((l) => l.trim() && !l.trim().startsWith("#"));
+    if (!incoming.length && hasContent) {
+      return setStatus(`적용할 규칙이 없습니다. ${errors[0] || ""}`, false);
+    }
+    getRules((cur) => {
+      const keep = new Set(incoming.map((r) => r.host));
+      const dropped = cur.filter((r) => !keep.has(normHost(r.host)));
+      if (
+        dropped.length &&
+        !confirm(`목록에 없는 사이트 규칙 ${dropped.length}개가 삭제됩니다. 계속할까요?\n\n` + dropped.map((r) => r.host).join("\n"))
+      ) {
+        return setStatus(`${verb}를 취소했습니다.`);
+      }
+      chrome.storage.local.set({ siteRules: incoming }, () => {
+        setStatus(
+          `규칙 ${incoming.length}개를 ${verb === "저장" ? "저장했습니다" : "불러왔습니다"}.` +
+            (dropped.length ? ` (삭제 ${dropped.length}개)` : "") +
+            (errors.length ? ` — 건너뜀 ${errors.length}건: ${errors[0]}` : ""),
+          true
+        );
+        if (then) then();
+      });
+    });
+  }
+
+  document.getElementById("editRules").addEventListener("click", () => {
+    getRules((rules) => {
+      textEl.value = serialize(rules);
+      editorEl.hidden = false;
+      setStatus("");
+      textEl.focus();
+      textEl.scrollTop = textEl.scrollHeight; // rules sit below the explanation
+    });
+  });
+  document.getElementById("saveText").addEventListener("click", () => applyText(textEl.value, "저장"));
+  document.getElementById("closeText").addEventListener("click", () => {
+    editorEl.hidden = true;
+    setStatus("");
+  });
+
   document.getElementById("importRules").addEventListener("click", () => fileEl.click());
   fileEl.addEventListener("change", () => {
     const file = fileEl.files && fileEl.files[0];
     if (!file) return;
     file.text().then((text) => {
       fileEl.value = "";
-      const { rules: incoming, errors } = parse(text);
-      if (!incoming.length && errors.length) {
-        return setStatus(`불러올 규칙이 없습니다. ${errors[0]}`, false);
-      }
-      getRules((cur) => {
-        const keep = new Set(incoming.map((r) => r.host));
-        const dropped = cur.filter((r) => !keep.has(normHost(r.host)));
-        if (dropped.length && !confirm(`파일에 없는 사이트 규칙 ${dropped.length}개가 삭제됩니다. 계속할까요?\n\n` + dropped.map((r) => r.host).join("\n"))) {
-          return setStatus("불러오기를 취소했습니다.");
-        }
-        chrome.storage.local.set({ siteRules: incoming }, () => {
-          setStatus(
-            `규칙 ${incoming.length}개를 불러왔습니다.` +
-              (dropped.length ? ` (삭제 ${dropped.length}개)` : "") +
-              (errors.length ? ` — 건너뜀 ${errors.length}건: ${errors[0]}` : ""),
-            true
-          );
-        });
-      });
+      applyText(text, "불러오기", () => getRules((rules) => (textEl.value = serialize(rules))));
     });
   });
 })();
