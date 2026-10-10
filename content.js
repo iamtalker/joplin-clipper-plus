@@ -323,6 +323,10 @@ const SCREENSHOT_FALLBACK_HOSTS = new Set([
   "www.slrclub.com",
   "www.inven.co.kr",
   "theqoo.net",
+  // MLBPARK images (simg.donga.com) answer 401 unless the request carries a
+  // mlbpark Referer, and send no CORS headers: the page can't read them and
+  // the background fetch (no Referer) is refused, so only a screenshot works.
+  "mlbpark.donga.com",
 ]);
 
 // script/style/template content has no Markdown representation, but Turndown
