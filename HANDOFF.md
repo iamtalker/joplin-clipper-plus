@@ -1,12 +1,21 @@
 # HANDOFF — 다음 세션에서 이어서 하기 위한 인계 문서
 
-마지막 갱신: 2026-09-25 / 현재 버전: **v0.38.1** (GitHub 태그 푸시 완료) / 작업 폴더: `C:\claude program\joplin-clipper`
+마지막 갱신: 2026-10-13 / 현재 버전: **v0.49.1** (GitHub 태그·릴리스 완료, 옵시디언 포크도 동일 버전) / 작업 폴더: `C:claude programjoplin-clipper-plus`
 
 ## ★ 옵시디언 포크 (2026-09-25~)
 - 옵시디언용 포크 **Obsidian Clipper Plus**: 레포 `iamtalker/obsidian-clipper-plus`, 로컬 `C:\claude program\obsidian-clipper-plus`. 사용자 볼트: `C:\MyData\Obsidian Scrapbook`(Local REST API with MCP 플러그인, HTTP 27123).
 - 공통 파일(`content.js`, `core.js`, `toolbar.js`, `popup.js`, `lib/`)은 **이 레포에서만 수정** → `bash scripts/sync-to-obsidian.sh`로 복사. 버전은 **바뀐 쪽만** 올림: 공통 파일이 바뀌면 두 레포 모두, 한쪽 전용 파일만 바뀌면 그쪽만(각 README 변경 이력 + 태그 + 푸시). 두 레포 버전 번호는 달라도 됨(사용자 방침, 2026-09-25).
 - 자세한 구조는 메모리 `project_obsidian_clipper.md`.
 
+## ★ 현재 상태 요약 (2026-10-10~13 세션: v0.39.1 → v0.49.1)
+- **사이트 규칙 시스템**: 사용자가 코드 없이 사이트별 본문 영역을 지정. 팝업의 🎯 도구(`picker.js`)로 클릭 지정 → `chrome.storage.local.siteRules`(`[{host, content, remove}]`). `content.js`의 `jcpUserSiteRule`가 내장 표(`SITE_CONTENT_SELECTORS`)보다 먼저 적용(Article 모드만). 설정 화면(`site-rules.js`)에는 ✏️ 규칙 편집(텍스트 편집창, 저장 시 통째로 교체) + 파일 내보내기/불러오기. 파일 형식 `사이트 주소/추가할 것/삭제할 것`(띄어쓰기 무시).
+- **범용 정리(미등록 사이트)**: `jcpStripNoiseByName`(광고/공유/댓글 이름의 요소 제거, 본문 절반 이상 차지하는 요소는 보호), `jcpSingleArticleEl`(<article>이 하나뿐이고 Readability 결과의 0.5~1.3배면 우선).
+- **수정한 일반 버그**: `<picture><source>` 공백 때문에 사진이 코드 블록으로 보임(경향신문), AVIF/WebP를 조플린이 못 그림 → JPEG 변환(조선일보), 사이트 지정 영역이 여러 개일 때 한 줄로 붙음, `data-src`만 있는 이미지가 사라짐, Referer 없으면 401인 이미지 서버(MLBPARK) → 화면 캡처 폴백.
+- **새로 등록한 사이트**: 머니투데이, 조선일보, 네이버 뉴스, 오마이뉴스(오마이TV), 인벤 웹진, MLBPARK(캡처 폴백).
+- **배포**: `scripts/make-store-zip.sh`가 스토어용 zip 생성(`site-rules.js`, `picker.js` 포함 목록 유지 필수). 태그 푸시 시 GitHub Actions가 릴리스에 같은 zip을 `joplin-clipper-vX.Y.Z.zip`으로 첨부. LICENSE는 MIT.
+- **포럼**: 조플린 포럼 Apps 카테고리에 소개 글 게시(2026-10-10, AI 사용 명시·한국 사이트 전용 명시).
+- 이 환경에서는 네이버(naver.com)가 브라우저 도구로 열리지 않음 → 정적 저장본(curl)으로 구조 분석 후 하네스 페이지에서 확인. 실제 확장 결과는 사용자 확인에 의존.
+- **주의(작업 중 겪은 실수)**: 셸 따옴표 안의 백틱/역슬래시가 문자열을 망가뜨림(README·정규식). 긴 문자열/정규식은 스크립트 파일로 쓰고 쓴 뒤 grep으로 확인할 것.
 ## 0. 먼저 읽을 것
 - 프로젝트 메모리(자동 로드): `C:\Users\misti\.claude\projects\C--claude-program-joplin-clipper\memory\` (`project_joplin_clipper.md`, `feedback_versioning_workflow.md`) — 아키텍처, 함정, 삽질 이력이 상세히 있음.
 - 사용자용 문서/변경 이력: `README.md`(맨 아래 "변경 이력"이 가장 최신 상태를 알려줌).
