@@ -114,6 +114,10 @@ const SITE_CONTENT_SELECTORS = {
   // OhmyTV video pages: the YouTube embed (.vod) sits outside the .view-wrap
   // that holds the title and description, so all three are listed.
   "www.ohmynews.com": ".view_title, .vod, .txt_view",
+  // FMKorea: image posts have almost no text, so Readability picks the site
+  // header/logo (or the comments) instead of the post. Title span + the post
+  // <article> only; photos use data-original behind a transparent.gif placeholder.
+  "www.fmkorea.com": ".rd_hd .np_18px_span, .rd_body article",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
