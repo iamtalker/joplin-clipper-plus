@@ -118,6 +118,9 @@ const SITE_CONTENT_SELECTORS = {
   // header/logo (or the comments) instead of the post. Title span + the post
   // <article> only; photos use data-original behind a transparent.gif placeholder.
   "www.fmkorea.com": ".rd_hd .np_18px_span, .rd_body article",
+  // Ggoorr (Rhymix board): title in the article header, post in .slatc-body;
+  // the rest of article.slatc is the prev/next list, ads and the comment thread.
+  "ggoorr.net": ".slatc-header-title, .slatc-body",
 };
 
 // Naver Blog (and similar sites) don't put the real post in the top-level
@@ -350,6 +353,11 @@ function jcpStripNonContentTags(root) {
   // six of them (Kyunghyang) put 6 leading spaces before "![", which Markdown
   // reads as an indented code block — the photo shows up as literal text.
   root.querySelectorAll("picture > source").forEach((el) => el.remove());
+  // Empty layout/form tables (e.g. Ggoorr's <table class="slatc-extra"></table>)
+  // carry nothing and crashed the GFM table rule.
+  root.querySelectorAll("table").forEach((t) => {
+    if (!t.querySelector("tr") && !t.textContent.trim() && !t.querySelector("img, video, iframe")) t.remove();
+  });
   return root;
 }
 
