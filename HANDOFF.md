@@ -1,12 +1,18 @@
 # HANDOFF — 다음 세션에서 이어서 하기 위한 인계 문서
 
-마지막 갱신: 2026-10-13 / 현재 버전: **v0.49.1** (GitHub 태그·릴리스 완료, 옵시디언 포크도 동일 버전) / 작업 폴더: `C:claude programjoplin-clipper-plus`
+마지막 갱신: 2026-10-17 / 현재 버전: **v0.51.0** (GitHub 태그·릴리스 완료, 옵시디언 포크도 동일 버전) / 작업 폴더: `C:claude program. 안정화joplin-clipper-plus` (옵시디언: 같은 폴더의 `obsidian-clipper-plus`)
 
 ## ★ 옵시디언 포크 (2026-09-25~)
 - 옵시디언용 포크 **Obsidian Clipper Plus**: 레포 `iamtalker/obsidian-clipper-plus`, 로컬 `C:\claude program\obsidian-clipper-plus`. 사용자 볼트: `C:\MyData\Obsidian Scrapbook`(Local REST API with MCP 플러그인, HTTP 27123).
 - 공통 파일(`content.js`, `core.js`, `toolbar.js`, `popup.js`, `lib/`)은 **이 레포에서만 수정** → `bash scripts/sync-to-obsidian.sh`로 복사. 버전은 **바뀐 쪽만** 올림: 공통 파일이 바뀌면 두 레포 모두, 한쪽 전용 파일만 바뀌면 그쪽만(각 README 변경 이력 + 태그 + 푸시). 두 레포 버전 번호는 달라도 됨(사용자 방침, 2026-09-25).
 - 자세한 구조는 메모리 `project_obsidian_clipper.md`.
 
+## ★ 최신 세션 요약 (2026-10-13~17: v0.49.1 → v0.51.0)
+- **새 세션을 시작할 때**: 이 파일 + `README.md`(기능·내장 지원 사이트·변경 이력) + 메모리 노트(`project_joplin_clipper.md`)만 읽으면 이어서 작업 가능. 긴 세션을 보관했다 해제하면 토큰이 크게 드니(캐시 만료) **새 요청은 새 세션에서** 시작하는 편이 쌈 — 사용자와 합의한 방침.
+- **v0.50.0**: FM코리아(`www.fmkorea.com`: `.rd_hd .np_18px_span, .rd_body article`) — 사진 위주 글은 Readability가 머리말/글 목록을 뽑았음. 뒤쪽 사진은 `src`가 transparent.gif이고 `data-original`에 주소(정적 HTML에서는 `/new5/...` 부분 경로, 실제 DOM에서는 전체 주소로 바뀜).
+- **v0.51.0**: 꾸르(`ggoorr.net`: `.slatc-header-title, .slatc-body`) + **빈 `<table>`이 있으면 표 변환(`lib/turndown-plugin-gfm.js`)이 `node.rows[0]` undefined로 죽던 버그 수정**(표 규칙 두 곳 가드 + `jcpStripNonContentTags`에서 빈 표 제거).
+- **작업 환경 메모**: 이 환경의 브라우저 도구는 naver.com·inven.co.kr 등이 막혀 있고 일부 이미지 서버 요청도 막힘 → 페이지를 `curl`로 받아 정적 HTML을 로컬 서버(스크래치 폴더, 포트 8766)에 올리고 `content.js`를 주입해 결과를 비교하는 하네스를 썼음(사이트 키를 `localhost`로 바꿔 등록 규칙을 시험). 실제 확장에서의 이미지 저장 단계는 사용자 확인에 의존.
+- **릴리스 절차(매번)**: `content.js` 재주입 체크 → `bash scripts/sync-to-obsidian.sh` → 두 저장소 `manifest.json` 버전 + README 변경 이력 맨 위에 항목 → 각각 커밋·`git tag vX.Y.Z`·푸시(옵시디언 README에는 짧은 항목). 셸 따옴표 안의 백틱/역슬래시가 문자열을 망가뜨리므로 긴 문자열은 스크립트 파일로.
 ## ★ 현재 상태 요약 (2026-10-10~13 세션: v0.39.1 → v0.49.1)
 - **사이트 규칙 시스템**: 사용자가 코드 없이 사이트별 본문 영역을 지정. 팝업의 🎯 도구(`picker.js`)로 클릭 지정 → `chrome.storage.local.siteRules`(`[{host, content, remove}]`). `content.js`의 `jcpUserSiteRule`가 내장 표(`SITE_CONTENT_SELECTORS`)보다 먼저 적용(Article 모드만). 설정 화면(`site-rules.js`)에는 ✏️ 규칙 편집(텍스트 편집창, 저장 시 통째로 교체) + 파일 내보내기/불러오기. 파일 형식 `사이트 주소/추가할 것/삭제할 것`(띄어쓰기 무시).
 - **범용 정리(미등록 사이트)**: `jcpStripNoiseByName`(광고/공유/댓글 이름의 요소 제거, 본문 절반 이상 차지하는 요소는 보호), `jcpSingleArticleEl`(<article>이 하나뿐이고 Readability 결과의 0.5~1.3배면 우선).
