@@ -1160,7 +1160,53 @@ async function jcpUserSiteRule() {
   }
 }
 
+// YouTube watch/shorts pages: the page is a script-built SPA with no article
+// text, so Readability finds nothing. Build the note from the player metadata:
+// title, channel, the video URL alone on its own line (Joplin auto-embeds it),
+// then the description.
+function jcpYouTubeVideoId() {
+  const host = location.hostname.replace(/^(www|m|music)\./, "");
+  if (host !== "youtube.com") return null;
+  const m = location.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (m) return m[1];
+  return new URLSearchParams(location.search).get("v");
+}
+
+function jcpClipYouTube(videoId) {
+  const text = (sel) => {
+    const el = document.querySelector(sel);
+    return el ? el.innerText.trim() : "";
+  };
+  const title =
+    text("ytd-watch-metadata h1") ||
+    (document.querySelector('meta[property="og:title"]') || {}).content ||
+    document.title.replace(/ - YouTube$/, "");
+  const channel =
+    text("ytd-watch-metadata ytd-channel-name a") || text("#owner #channel-name a");
+  let desc = text("#description-inner #attributed-snippet-text") || text("#description yt-attributed-string");
+  if (!desc) desc = (document.querySelector('meta[property="og:description"]') || {}).content || "";
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  // Hard line breaks keep the description's own lines; escape markdown chars
+  // that would otherwise turn plain description text into formatting.
+  const body = desc.replace(/([\\`*_{}\[\]<>#|])/g, "\\$1").replace(/\n/g, "  \n");
+  const parts = [`# ${title}`];
+  if (channel) parts.push(`**${channel}**`);
+  parts.push(url);
+  if (body) parts.push(body);
+  return {
+    mode: "article",
+    title,
+    markdown: parts.join("\n\n"),
+    html: "",
+    excerpt: "",
+    byline: channel,
+    url: location.href,
+  };
+}
+
 async function jcpClipArticle() {
+  const ytId = jcpYouTubeVideoId();
+  if (ytId) return jcpClipYouTube(ytId);
   const { doc: effectiveDoc, baseUrl } = jcpGetEffectiveDoc();
   const userRule = await jcpUserSiteRule();
   let overrideEls = [];
