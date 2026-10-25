@@ -33,6 +33,7 @@ document.querySelectorAll(".modes button").forEach((btn) => {
 // the user clicks into the page to select) and close. If something is
 // already selected, stay here and let Clip save it as before.
 let tabTitle = "";
+let pageUrl = "";
 function startSelection(onHasSelection) {
   const title = titleEl.value.trim();
   chrome.runtime.sendMessage(
@@ -77,7 +78,19 @@ async function init() {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   tabTitle = tab.title || "";
+  // SPA sites (YouTube playlists) change the page without a navigation, so
+  // Chrome's tab.title can lag behind; the page's own document.title is live.
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => document.title,
+    });
+    if (result) tabTitle = result;
+  } catch (e) {
+    // restricted page: keep the tab title
+  }
   titleEl.value = tabTitle;
+  pageUrl = tab.url || "";
 
   // Defaults picked on the options page, so the popup opens ready to Clip.
   // Choosing a default mode here doesn't open the Selection toolbar by
@@ -127,7 +140,12 @@ function clip() {
       mode,
       parentId: notebookEl.value || undefined,
       tags: tagsEl.value.trim() || undefined,
-      title: titleEl.value.trim() || undefined,
+      // YouTube clips build their own title from the player; only send the
+      // box's text there when the user edited it.
+      title:
+        /^https?:\/\/(www\.|m\.|music\.)?youtube\.com\//.test(pageUrl) && titleEl.value.trim() === tabTitle
+          ? undefined
+          : titleEl.value.trim() || undefined,
     },
     (res) => {
       clipBtn.disabled = false;
