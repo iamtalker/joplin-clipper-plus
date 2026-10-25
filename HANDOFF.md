@@ -11,6 +11,7 @@
 - **v0.52.0**: 유튜브 시청/쇼츠 페이지 클리핑 지원. 스크립트로 그리는 SPA라 Readability가 못 읽었음 → `content.js`의 `jcpClipYouTube`가 Article 모드에서 제목(`ytd-watch-metadata h1`)·채널·영상 주소(혼자 한 줄 → 조플린 자동 임베드)·설명란(`#description-inner #attributed-snippet-text`)으로 노트를 직접 구성. 퍼 온 임베드(iframe)는 예전부터 되던 별개 경로.
 - **v0.52.1**: 재생목록에서 영상을 바꾸면 노트 제목이 이전 영상 것으로 저장되던 문제. 원인은 팝업이 `tab.title`(SPA 전환 시 크롬이 갱신 늦음)을 제목칸에 넣어 그대로 보내 덮어쓴 것 → 팝업이 열릴 때 `document.title`을 읽고, 유튜브에서는 제목칸을 안 고쳤으면 클리핑 쪽 제목을 사용(`popup.js`).
 - 사용자가 실제 확장에서 두 건 모두 정상 확인(2026-10-25). 두 레포 푸시·태그 완료. 교훈: SPA 사이트는 `tab.title`/`og:*` 메타가 낡을 수 있으니 DOM과 `document.title`을 직접 읽을 것.
+- **스토어**: v0.52.1을 2026-10-25 제출, 검수 대기 중(승인본은 0.25였음). 다음 세션에서 승인 여부부터 확인.
 ## ★ 최신 세션 요약 (2026-10-13~17: v0.49.1 → v0.51.0)
 - **새 세션을 시작할 때**: 이 파일 + `README.md`(기능·내장 지원 사이트·변경 이력) + 메모리 노트(`project_joplin_clipper.md`)만 읽으면 이어서 작업 가능. 긴 세션을 보관했다 해제하면 토큰이 크게 드니(캐시 만료) **새 요청은 새 세션에서** 시작하는 편이 쌈 — 사용자와 합의한 방침.
 - **v0.50.0**: FM코리아(`www.fmkorea.com`: `.rd_hd .np_18px_span, .rd_body article`) — 사진 위주 글은 Readability가 머리말/글 목록을 뽑았음. 뒤쪽 사진은 `src`가 transparent.gif이고 `data-original`에 주소(정적 HTML에서는 `/new5/...` 부분 경로, 실제 DOM에서는 전체 주소로 바뀜).
