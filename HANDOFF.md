@@ -1,11 +1,19 @@
 # HANDOFF — 다음 세션에서 이어서 하기 위한 인계 문서
 
-마지막 갱신: 2026-10-25 / 현재 버전: **v0.52.1** (GitHub 태그·릴리스 완료, 옵시디언 포크도 동일 버전) / 작업 폴더: `C:claude program. 안정화joplin-clipper-plus` (옵시디언: 같은 폴더의 `obsidian-clipper-plus`)
+마지막 갱신: 2026-11-07 / 현재 버전: **v0.53.0** (옵시디언 포크도 동일 버전, 두 저장소 태그·푸시 완료) / 작업 폴더: `C:claude program. 안정화joplin-clipper-plus` (옵시디언: 같은 폴더의 `obsidian-clipper-plus`)
 
 ## ★ 옵시디언 포크 (2026-09-25~)
 - 옵시디언용 포크 **Obsidian Clipper Plus**: 레포 `iamtalker/obsidian-clipper-plus`, 로컬 `C:\claude program\obsidian-clipper-plus`. 사용자 볼트: `C:\MyData\Obsidian Scrapbook`(Local REST API with MCP 플러그인, HTTP 27123).
 - 공통 파일(`content.js`, `core.js`, `toolbar.js`, `popup.js`, `lib/`)은 **이 레포에서만 수정** → `bash scripts/sync-to-obsidian.sh`로 복사. 버전은 **바뀐 쪽만** 올림: 공통 파일이 바뀌면 두 레포 모두, 한쪽 전용 파일만 바뀌면 그쪽만(각 README 변경 이력 + 태그 + 푸시). 두 레포 버전 번호는 달라도 됨(사용자 방침, 2026-09-25).
 - 자세한 구조는 메모리 `project_obsidian_clipper.md`.
+
+## ★ 최신 세션 요약 (2026-11-07: v0.52.1 → v0.53.0, 모바일 규칙·제목 중복)
+- **사용자 지적**: 사이트 규칙은 PC 주소로 테스트해서 만들었고, 모바일 주소(`m.`)는 규칙에 안 걸려 댓글·메뉴가 딸려오거나 본문이 빠짐. 또 본문 맨 앞에 노트 제목이 한 번 더 들어감(조플린·앱 둘 다).
+- **모바일 규칙**: `content.js`의 `MOBILE_HOST_ALIAS`(모바일 호스트 → PC 호스트, 예: `m.clien.net → www.clien.net`)로 PC 규칙을 재사용. 모바일 호스트 키가 있으면 그것이 우선(`jcpSiteRule`). 모바일 전용 선택자: `m.ppomppu.co.kr`(`#KH_Content`), `m.humoruniv.com`(`.wrap_body`), `m.blog.naver.com`(`.post_ct`), `m.clien.net` 정리 규칙. 사이트 조회 8곳을 `jcpSiteRule`/`jcpInSiteSet`로 통일, 사용자 규칙(`jcpUserSiteRule`)도 모바일이면 PC 규칙을 씀.
+- **제목 중복**: `jcpDropLeadingTitle`(본문 맨 앞 세 줄 안의 제목 줄 제거, 사이트 이름 접미사 무시). 앱 쪽 `clipserver.py`에도 같은 처리가 있음(0.6.57).
+- **확인 방법(이번 세션)**: 정적 HTML은 jsdom으로 실제 `content.js`를 돌리는 하네스(스크래치 `harness/clip.js`, EUC-KR 디코딩 포함), JS로 그려지는 페이지는 내장 브라우저 모바일 화면에서 선택자 개수 확인.
+- **모바일 주소가 없거나 확인 못 한 곳(규칙 안 바꿈)**: `m.etoland`·`m.82cook`·`m.v.daum`·`m.ggoorr`·`m.mlbpark`·`m.news.naver`·`m.todayhumor`·`m.chosun`은 호스트가 없거나 404(같은 주소의 모바일 UA 사용). 이토랜드 글은 로그인 필요/삭제로 본문이 안 보임. 아카라이브는 451 응답. 위키백과·나무위키는 규칙 없이 Readability로 처리(문서가 아주 길고 HTML 찌꺼기가 섞임 — 다음 과제).
+- **남은 것**: 실제 확장에서 모바일 저장 결과 확인(사용자), 위키백과 모바일 정리, 디시 모바일 디시콘 자리표시 이미지(실제 확장에서는 `data-src`를 쓰므로 정상일 가능성 높음).
 
 ## ★ 최신 세션 요약 (2026-10-25: v0.52.0 → v0.52.1, 유튜브)
 - **v0.52.0**: 유튜브 시청/쇼츠 페이지 클리핑 지원. 스크립트로 그리는 SPA라 Readability가 못 읽었음 → `content.js`의 `jcpClipYouTube`가 Article 모드에서 제목(`ytd-watch-metadata h1`)·채널·영상 주소(혼자 한 줄 → 조플린 자동 임베드)·설명란(`#description-inner #attributed-snippet-text`)으로 노트를 직접 구성. 퍼 온 임베드(iframe)는 예전부터 되던 별개 경로.
