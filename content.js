@@ -52,6 +52,11 @@ function jcpInSiteSet(set) {
 // A selector may match several separate elements (e.g. title + author + body
 // live in three different siblings) — every match is kept, in document order.
 const SITE_CONTENT_SELECTORS = {
+  // X's permalink page renders the post and replies as tweet cards inside
+  // the main column. Keep those cards in screen order while excluding the
+  // navigation, trends, recommendations, and other page chrome around them.
+  "x.com": "main article[data-testid='tweet']",
+  "twitter.com": "main article[data-testid='tweet']",
   "gall.dcinside.com": ".view_content_wrap",
   "m.dcinside.com": ".thum-txt, .view_content_wrap",
   "www.clien.net": ".post_title, .post_author, .post_view",
@@ -306,6 +311,20 @@ function jcpFixWikiToc(root) {
 // widgets (recommend buttons, attachment file lists, related-gallery boxes,
 // ad slots) that live inside the content container but aren't part of the post.
 const SITE_CLEANUP_SELECTORS = {
+  // Keep tweet text, author, timestamp, and media, but strip X's engagement
+  // toolbar, analytics/quotes links, and recommendation context from each card.
+  "x.com": [
+    "article[data-testid='tweet'] [role='group']",
+    "article[data-testid='tweet'] a[href*='/analytics']",
+    "article[data-testid='tweet'] a[href*='/quotes']",
+    "article[data-testid='tweet'] [data-testid='socialContext']",
+  ],
+  "twitter.com": [
+    "article[data-testid='tweet'] [role='group']",
+    "article[data-testid='tweet'] a[href*='/analytics']",
+    "article[data-testid='tweet'] a[href*='/quotes']",
+    "article[data-testid='tweet'] [data-testid='socialContext']",
+  ],
   "gall.dcinside.com": [
     ".btn_recommend_box",
     ".appending_file_box",
@@ -609,6 +628,116 @@ function jcpApplyVideoPlaceholders(markdown, urls) {
     result = result.replace(`JCPVIDEOPLACEHOLDERx${idx}xENDPLACEHOLDER`, url);
   });
   return result;
+}
+
+// X wraps avatars, profile names, and tweet photos in links. Profile links
+// often contain block elements, which Turndown renders as broken multiline
+// Markdown links. Keep their readable text (and images) but discard the link
+// wrapper; remove empty icon-only links that have no readable label.
+function jcpCleanXImageLinks(root) {
+  if (
+    location.hostname !== "x.com" && location.hostname !== "www.x.com" &&
+    location.hostname !== "twitter.com" && location.hostname !== "www.twitter.com"
+  ) return;
+  root.querySelectorAll("a[href]").forEach((a) => {
+    let isProfileLink = false;
+    try {
+      const u = new URL(a.getAttribute("href"), location.href);
+      const segments = u.pathname.split("/").filter(Boolean);
+      isProfileLink =
+        /(^|\.)x\.com$|(^|\.)twitter\.com$/i.test(u.hostname) &&
+        segments.length === 1 &&
+        !/^(home|explore|search|notifications|messages|i|settings)$/i.test(segments[0]);
+    } catch (e) {}
+    if (isProfileLink || !a.textContent.trim()) {
+      if (a.querySelector("img") || isProfileLink) {
+        a.replaceWith(...Array.from(a.childNodes));
+      } else {
+        a.remove();
+      }
+    }
+  });
+}
+
+// X renders each author name, handle, and timestamp in separate nested block
+// elements. Flatten them into the compact one-line header used by the page.
+function jcpNormalizeXTweetCard(card) {
+  if (!["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(location.hostname)) return;
+  card.querySelectorAll("div, span, a, button").forEach((el) => {
+    const text = el.textContent.replace(/\s+/g, " ").trim();
+    if (/^(관련 있음|Relevant)$/i.test(text)) el.remove();
+  });
+  jcpNormalizeXTranslationLine(card);
+  const user = card.querySelector("[data-testid='User-Name']");
+  if (!user) return;
+  const links = Array.from(user.querySelectorAll("a"));
+  const texts = links.map((a) => a.textContent.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const name = texts.find((t) => !t.startsWith("@")) || "";
+  const handle = texts.find((t) => t.startsWith("@")) || "";
+  const time = card.querySelector("time");
+  const timeText = time ? time.textContent.replace(/\s+/g, " ").trim() : "";
+  user.remove();
+  if (time) (time.closest("a") || time).remove();
+
+  // Remove the separator left between the author block and timestamp in X's
+  // original DOM, then put the normalized header at the front of the card.
+  card.querySelectorAll("div, span").forEach((el) => {
+    if (el.textContent.trim() === "·") el.remove();
+  });
+  if (name || handle || timeText) {
+    const header = document.createElement("p");
+    if (name) {
+      const strong = document.createElement("strong");
+      strong.textContent = name;
+      header.appendChild(strong);
+    }
+    if (handle) {
+      if (header.childNodes.length) header.appendChild(document.createTextNode(" "));
+      header.appendChild(document.createTextNode(handle));
+    }
+    if (timeText) {
+      if (header.childNodes.length) header.appendChild(document.createTextNode(" · "));
+      header.appendChild(document.createTextNode(timeText));
+    }
+    card.insertBefore(header, card.firstChild);
+  }
+}
+
+function jcpNormalizeXTranslationLine(card) {
+  const elements = Array.from(card.querySelectorAll("div, span, a, button"));
+  const compact = (el) => el.textContent.replace(/\s+/g, " ").trim();
+  const full = elements.find((el) =>
+    /^(?:원문 언어 .+ 원본 보기|Original language .+ View original)$/i.test(compact(el))
+  );
+  if (full) {
+    const line = document.createElement("p");
+    line.textContent = compact(full);
+    full.replaceWith(line);
+    return;
+  }
+
+  const language = elements.find((el) => /^(?:원문 언어 .+|Original language .+)$/i.test(compact(el)));
+  const view = elements.find((el) => /^(?:원본 보기|View original)$/i.test(compact(el)));
+  if (!language || !view) return;
+  let row = language.parentElement;
+  while (row && row !== card && !row.contains(view)) row = row.parentElement;
+  if (!row || row === card) return;
+  const line = document.createElement("p");
+  line.textContent = `${compact(language)} ${compact(view)}`;
+  row.replaceWith(line);
+}
+
+async function jcpExpandXTweetText(doc) {
+  if (!["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(location.hostname)) return;
+  let expanded = false;
+  doc.querySelectorAll("main article[data-testid='tweet'] button, main article[data-testid='tweet'] [role='button']")
+    .forEach((el) => {
+      if (/^(더 보기|Show more)$/i.test(el.textContent.replace(/\s+/g, " ").trim())) {
+        el.click();
+        expanded = true;
+      }
+    });
+  if (expanded) await new Promise((resolve) => setTimeout(resolve, 120));
 }
 
 // Self-hosted <video> tags (meme/GIF-style clips, direct mp4/webm — not an
@@ -1313,6 +1442,7 @@ async function jcpClipArticle() {
   const ytId = jcpYouTubeVideoId();
   if (ytId) return jcpClipYouTube(ytId);
   const { doc: effectiveDoc, baseUrl } = jcpGetEffectiveDoc();
+  await jcpExpandXTweetText(effectiveDoc);
   const userRule = await jcpUserSiteRule();
   let overrideEls = [];
   let usedUserRule = false;
@@ -1336,7 +1466,9 @@ async function jcpClipArticle() {
     // timestamp span) would otherwise run together on a single line.
     overrideEls.forEach((el) => {
       const wrap = document.createElement("div");
-      wrap.appendChild(el.cloneNode(true));
+      const copy = el.cloneNode(true);
+      jcpNormalizeXTweetCard(copy);
+      wrap.appendChild(copy);
       container.appendChild(wrap);
     });
     jcpAbsolutize(container, baseUrl);
@@ -1414,6 +1546,7 @@ async function jcpClipArticle() {
   const videoIds = jcpExtractVideoPlaceholders(wrapper);
   jcpCleanVideoTags(wrapper, baseUrl);
   await jcpInlineImages(wrapper, baseUrl);
+  jcpCleanXImageLinks(wrapper);
   const td = jcpMakeTurndown();
   // The title is saved as the note's name, so a first line that repeats it
   // (the page's own headline, which Readability keeps) is dropped from the body.
