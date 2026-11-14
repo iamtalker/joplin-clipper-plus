@@ -70,6 +70,12 @@ const SITE_CONTENT_SELECTORS = {
   // Image-macro posts here have almost no text, so Readability's density
   // scoring often finds no article at all and fails outright.
   "www.ppomppu.co.kr": ".board-contents",
+  // DogDrip (Rhymix): Readability grabbed the site nav and missed the post's
+  // photos (image-only posts). Title is the h4 in .article-head; the body is the
+  // div whose class starts with "document_" (the post number is in the class
+  // name, so it is not hardcoded). Comments use "comment_..." classes and are
+  // excluded; the "이 게시물을..." menu links are <a>, excluded by the div filter.
+  "www.dogdrip.net": ".article-head h4, div[class^='document_']",
   // Skips the verbose writerInfoContainer meta block (post id, IP, permalink,
   // recommend/view/comment counts) and the "추천한 분들" list + legend footer —
   // title and body live in their own separate siblings anyway.
