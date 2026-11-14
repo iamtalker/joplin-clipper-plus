@@ -1474,6 +1474,10 @@ async function jcpClipArticle() {
     const container = document.createElement("div");
     // Each match in its own block: inline matches (a reporter name span, a
     // timestamp span) would otherwise run together on a single line.
+    // An element nested inside another match (Inven's #powerbbsContent sits
+    // inside #imageCollectDiv) is already part of that outer clone; keeping it
+    // too would save the same content twice.
+    overrideEls = overrideEls.filter((el) => !overrideEls.some((o) => o !== el && o.contains(el)));
     overrideEls.forEach((el) => {
       const wrap = document.createElement("div");
       const copy = el.cloneNode(true);
