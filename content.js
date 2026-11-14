@@ -76,6 +76,10 @@ const SITE_CONTENT_SELECTORS = {
   // name, so it is not hardcoded). Comments use "comment_..." classes and are
   // excluded; the "이 게시물을..." menu links are <a>, excluded by the div filter.
   "www.dogdrip.net": ".article-head h4, div[class^='document_']",
+  // Ilbe: Readability picked the site's footer (terms/policy links) and dropped
+  // the post. Title is the single h1 in .board-view; the body is .post-content
+  // (the vote buttons sit outside it).
+  "www.ilbe.com": ".board-view h1, .post-content",
   // Skips the verbose writerInfoContainer meta block (post id, IP, permalink,
   // recommend/view/comment counts) and the "추천한 분들" list + legend footer —
   // title and body live in their own separate siblings anyway.
