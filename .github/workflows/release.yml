@@ -14,20 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Only the files each extension needs, manifest.json at the zip root.
-      # The Chrome zip works for the Chrome Web Store upload and for "Load
-      # unpacked"; the Firefox zip is the AMO upload / temporary add-on.
-      - name: Build extension zips
+      # Only the files the extension needs, manifest.json at the zip root —
+      # the same file works for the Chrome Web Store upload and for
+      # "Load unpacked" after unzipping.
+      - name: Build extension zip
         run: |
-          bash scripts/make-store-zip.sh chrome dist
-          bash scripts/make-store-zip.sh firefox dist
+          bash scripts/make-store-zip.sh dist
           cp dist/joplin-clipper-plus-store-*.zip "joplin-clipper-${GITHUB_REF_NAME}.zip"
-          cp dist/joplin-clipper-plus-firefox-*.zip "joplin-clipper-firefox-${GITHUB_REF_NAME}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            joplin-clipper-${{ github.ref_name }}.zip
-            joplin-clipper-firefox-${{ github.ref_name }}.zip
+          files: joplin-clipper-${{ github.ref_name }}.zip
           generate_release_notes: true

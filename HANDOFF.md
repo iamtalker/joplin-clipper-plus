@@ -2,11 +2,10 @@
 
 마지막 갱신: 2026-11-07 / 현재 버전: **v0.53.0** (옵시디언 포크도 동일 버전, 두 저장소 태그·푸시 완료) / 작업 폴더: `C:claude program. 안정화joplin-clipper-plus` (옵시디언: 같은 폴더의 `obsidian-clipper-plus`)
 
-## ★★ 최신 규칙 (2026-11-15) — 크롬·파이어폭스·옵시디언은 한 세트
-- 저장소 구조 변경: 확장 코드는 **`chrome/`**(기준)로 이동, **`firefox/`**는 `bash scripts/sync-to-firefox.sh`로 생성(`manifest.json`만 직접 관리: gecko id, `background.scripts`). 루트에는 문서·`scripts/`·`.github/`·`store-assets/`만 남음.
-- **하나를 업데이트하면 다른 둘도 반드시 같이 업데이트**(같은 버전, 세 곳 모두 커밋·태그·푸시). 절차: `chrome/` 수정 → `sync-to-firefox.sh` → `sync-to-obsidian.sh` → 세 `manifest.json` 버전 + 세 README 변경 이력 → 각각 커밋·태그·푸시. (사용자 지시)
-- 위의 옛 경로(`content.js`, `manifest.json` 등)는 모두 `chrome/` 아래. `make-store-zip.sh`는 `[chrome|firefox] [출력폴더]`를 받고, 태그 푸시 시 CI가 두 zip(`joplin-clipper-vX.zip`, `joplin-clipper-firefox-vX.zip`)을 첨부.
-- 파이어폭스 버전은 아직 실제 파이어폭스에서 로드·동작 확인 못 함(문법·manifest JSON 검사만). AMO 제출 전 `about:debugging`으로 확인 필요.
+## ★★ 최신 규칙 (2026-11-15) — 크롬 확장과 옵시디언은 한 세트
+- 저장소 구조: 확장 코드는 **`chrome/`**(기준)에 있고 루트에는 문서·`scripts/`·`.github/`·`store-assets/`만 있음. 파이어폭스 버전은 0.55.0에서 만들었다가 0.55.1에서 폐기(사용자 결정, `firefox/` 없음).
+- **하나를 업데이트하면 다른 쪽도 반드시 같이 업데이트**(같은 버전, 두 저장소 모두 커밋·태그·푸시). 절차: `chrome/` 수정 → `sync-to-obsidian.sh` → 두 `manifest.json` 버전 + 두 README 변경 이력 → 각각 커밋·태그·푸시. (사용자 지시)
+- 위의 옛 경로(`content.js`, `manifest.json` 등)는 모두 `chrome/` 아래. `make-store-zip.sh [출력폴더]`는 `chrome/`에서 스토어용 zip을 만들고, 태그 푸시 시 CI가 `joplin-clipper-vX.zip`을 첨부.
 
 ## ★ 옵시디언 포크 (2026-09-25~)
 - 옵시디언용 포크 **Obsidian Clipper Plus**: 레포 `iamtalker/obsidian-clipper-plus`, 로컬 `C:\claude program\obsidian-clipper-plus`. 사용자 볼트: `C:\MyData\Obsidian Scrapbook`(Local REST API with MCP 플러그인, HTTP 27123).

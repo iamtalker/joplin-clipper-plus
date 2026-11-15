@@ -2,11 +2,11 @@
 
 Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 조플린용 웹 클리퍼 크롬 확장(Manifest V3)입니다.
 
-> **크롬·파이어폭스·옵시디언은 한 세트입니다.** 이 저장소의 `chrome/`(기준 코드), `firefox/`, 그리고 옵시디언 포크([obsidian-clipper-plus](https://github.com/iamtalker/obsidian-clipper-plus))는 같은 코드를 나눠 씁니다. **하나를 고치면 나머지 둘도 반드시 함께 갱신하고 같은 버전으로 릴리스합니다.**
+> **크롬 확장과 옵시디언 포크([obsidian-clipper-plus](https://github.com/iamtalker/obsidian-clipper-plus))는 한 세트입니다.** 공통 코드는 이 저장소의 `chrome/`에서만 고치고, 하나를 업데이트하면 다른 쪽도 같은 버전으로 함께 업데이트합니다.
 >
 > 1. `chrome/`에서만 공통 코드를 수정
-> 2. `bash scripts/sync-to-firefox.sh` (`firefox/` 재생성) + `bash scripts/sync-to-obsidian.sh` (옵시디언 포크로 복사)
-> 3. 세 곳의 `manifest.json` 버전을 같게 올리고, 세 README의 변경 이력에 항목 추가
+> 2. `bash scripts/sync-to-obsidian.sh`로 옵시디언 포크에 복사
+> 3. 두 곳의 `manifest.json` 버전을 같게 올리고, 두 README의 변경 이력에 항목 추가
 > 4. 각각 커밋 · `git tag vX.Y.Z` · 푸시
 
 **크롬 웹 스토어**: https://chromewebstore.google.com/detail/joplin-clipper-plus/fbieoidncnoalmenkkpbcbomppoenfoa
@@ -45,7 +45,6 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
   2. 우측 상단 "개발자 모드" 켜기
   3. "압축해제된 확장 프로그램을 로드합니다" 클릭
   4. 릴리스에서 받은 `joplin-clipper-vX.Y.Z.zip`을 풀어서(`manifest.json`이 바로 보이는 폴더) 또는 소스의 `chrome/` 폴더를 선택
-- **파이어폭스 (개발용)**: 릴리스에서 `joplin-clipper-firefox-vX.Y.Z.zip`을 받거나 소스의 `firefox/` 폴더를 씁니다. 주소창에 `about:debugging#/runtime/this-firefox` → **임시 부가 기능 로드** → `manifest.json` 선택(파이어폭스를 끄면 사라지는 임시 설치). 파이어폭스 128 이상이 필요합니다. 아직 AMO(파이어폭스 부가 기능 스토어)에는 올리지 않았습니다.
   - 릴리스 zip은 폴더 없이 `manifest.json`이 맨 바깥에 있는 크롬 웹 스토어 제출용과 같은 파일입니다
 
 ### 3. 토큰 등록
@@ -93,6 +92,7 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 - `SITE_CONTENT_SELECTORS`에 등록되지 않은 사이트는 Readability를 쓰는데, 이게 본문 일부만 가져오는 경우(나무위키 등 빌드마다 클래스명이 바뀌는 SPA에서 흔함) `jcpHeadingLCA`가 자동으로 h1~h4 제목들의 공통 부모를 대신 시도합니다 — Readability보다 1.5배 이상 크면서 전체 페이지의 70% 미만일 때만 교체되는 보수적인 조건이라, 대부분의 정상 사이트에는 영향 없습니다. 그래도 여전히 부족하면 그 사이트도 `SITE_CONTENT_SELECTORS`로 직접 지정해주세요.
 
 ## 변경 이력
+- **0.55.1** — **파이어폭스 버전 폐기**(0.55.0에서 추가했으나 쓰지 않기로 함). `firefox/` 폴더와 `scripts/sync-to-firefox.sh`를 없애고 릴리스 zip은 크롬용 하나만 만듦. 앞으로는 크롬 확장(`chrome/`)과 옵시디언 포크 두 개가 한 세트. 코드 동작 변경 없음.
 - **0.55.0** — **파이어폭스 버전 추가** + 저장소 구조 변경. 확장 코드는 `chrome/`(기준)으로 옮기고, `firefox/`는 `scripts/sync-to-firefox.sh`로 `chrome/`에서 생성(매니페스트만 별도: 확장 ID, `background.scripts`, 최소 파이어폭스 128). 크롬·파이어폭스·옵시디언은 한 세트라 같은 버전으로 함께 릴리스. 릴리스에 파이어폭스 zip(`joplin-clipper-firefox-vX.Y.Z.zip`)도 첨부. 파이어폭스에서의 실제 동작은 사용자 확인 필요(문법·매니페스트 검사만 함).
 - **0.54.11** — 인벤(inven.co.kr) 웹진 게시판 글이 같은 내용으로 2번 저장되던 문제 수정(사용자 제보: https://www.inven.co.kr/board/webzine/2097/2752489). 인벤 규칙에 지정한 `#powerbbsContent`가 `#imageCollectDiv`(웹진 뉴스용으로 0.46.0에서 추가) 안에 들어 있어, 두 영역이 각각 복사되면서 본문이 중복됐음. 사이트 지정 영역이 다른 지정 영역 안에 들어 있으면 바깥 것만 남기도록 일반 수정(모든 사이트 규칙에 적용). 저장된 페이지 HTML에서 중첩 구조를 확인했고, 사용자가 실제 크롬에서 중복이 사라진 것을 확인. 공유 코드라 옵시디언에도 적용.
 - **0.54.10** — 일베(ilbe.com) 게시물 클리핑 개선. Readability가 페이지 하단의 약관·개인정보처리방침 문구를 본문으로 잡아 글과 사진이 빠졌음. 제목(`.board-view h1`)과 본문(`.post-content`)만 지정. 저장된 페이지 HTML로 제목 1개와 사진 1장이 잡히는 것을 확인. 실제 크롬에서의 저장 결과는 사용자 확인 필요. 공유 코드라 옵시디언에도 적용.
@@ -199,7 +199,6 @@ Readability(Mozilla) 기반의 "간소화된 기사" 캡처를 핵심으로 한 
 ## 파일 구조
 ```
 chrome/              기준 코드(크롬 확장). 아래 파일들이 이 안에 있음
-firefox/             파이어폭스용. chrome/에서 sync-to-firefox.sh로 생성(manifest.json만 직접 관리)
 manifest.json        MV3 매니페스트 (권한: activeTab, scripting, storage, <all_urls> 호스트)
 background.js        서비스 워커: 조플린 API 호출(저장)
 core.js              조플린/옵시디언 공통: 페이지 주입, 이미지 캡처 폴백, 메시지 처리
@@ -210,8 +209,8 @@ site-rules.js        설정 화면의 사이트 규칙 편집창/내보내기/�
 popup.html/js        클리핑 UI
 options.html/js      토큰/포트/기본값 설정 화면
 lib/                 Readability.js, turndown.js, turndown-plugin-gfm.js (MIT/Apache-2.0)
-scripts/             파이어폭스·옵시디언 동기화, 스토어용 zip 생성, 아이콘/타일 생성
+scripts/             옵시디언 동기화, 스토어용 zip 생성, 아이콘/타일 생성
 LICENSE              MIT
 ```
 
-공통 파일(`content.js`, `core.js`, `toolbar.js`, `picker.js`, `site-rules.js`, `popup.js`, `lib/`)은 `chrome/`에서만 고치고 `bash scripts/sync-to-firefox.sh`, `bash scripts/sync-to-obsidian.sh`로 나머지 둘에 복사합니다(맨 위 "한 세트" 규칙 참고).
+공통 파일(`content.js`, `core.js`, `toolbar.js`, `picker.js`, `site-rules.js`, `popup.js`, `lib/`)은 `chrome/`에서만 고치고 `bash scripts/sync-to-obsidian.sh`로 나머지 둘에 복사합니다(맨 위 "한 세트" 규칙 참고).
